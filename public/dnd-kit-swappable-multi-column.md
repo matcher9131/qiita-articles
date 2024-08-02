@@ -565,4 +565,131 @@ const SortableColumn = ({ header }: SortableColumnProps): JSX.Element => {
 export default SortableColumn;
 ```
 
-<!-- TODO: overにopacity-50 -->
+## 異`Column`間の`Item`どうしの入れ替えをわかりやすく
+現状、`Column`どうしの入れ替えと同`Column`内の`Item`どうしの入れ替えに関してはドラッグ中に入れ替えアニメーションがされるため「入れ替え可能なんだな」とユーザーに思ってもらいやすい一方で、異`Column`間の`Item`どうしの入れ替えに関しては入れ替えアニメーションが無いために直感的に入れ替え可能に見えないという問題があります。
+
+よって、異`Column`間の`Item`どうしの入れ替えの際に *Droppable* の見た目を少し変えることでこれを解決します。
+
+まずはどの *Droppable* がターゲットになっているかを状態管理したいので、`atom`を追加します。さらに異`Column`間の`Item`どうしの入れ替えのみを検知するために、`activeId`と`overId`のそれぞれの親`Column`を取得する`selector`を作ります。
+
+```diff_tsx:dragTargets.ts
+-import { atom } from "recoil";
++import { atom, selector } from "recoil";
++import { containerChildrenState } from "./containerChildren";
+
+export const activeIdState = atom<string | null>({ key: "activeIdState", default: null });
+
++export const overIdState = atom<string | null>({ key: "overIdState", default: null });
+
++export const activeParentIdSelector = selector<string | null>({
++   key: "activeParentIdSelector",
++   get: ({ get }) => {
++       const activeId = get(activeIdState);
++       return get(containerChildrenState)?.find((column) => column.items.includes(activeId ?? ""))?.header ?? null;
++   },
++});
+
++export const overParentIdSelector = selector<string | null>({
++   key: "overParentIdSelector",
++   get: ({ get }) => {
++       const overId = get(overIdState);
++       return get(containerChildrenState)?.find((column) => column.items.includes(overId ?? ""))?.header ?? null;
++   },
++});
+```
+
+次に、追加した`overIdState`を機能させるために`DndContext`の`onDragOver`イベントハンドラを実装します。例によって`onDragEnd`でリセットするのをお忘れなく。
+
+```diff_tsx:App.tsx(抜粋)
+const App = (): JSX.Element => {
+    const columns = useRecoilValue(containerChildrenState);
+    const { swap } = useContainerChildren();
+    const [activeId, setActiveId] = useRecoilState(activeIdState);
++   const [, setOverId] = useRecoilState(overIdState);
+
+    const handleDragStart = (e: DragStartEvent) => {
+        setActiveId(e.active.id.toString());
+    };
+
++   const handleDragOver = (e: DragOverEvent) => {
++       setOverId(e.over?.id?.toString() ?? null);
++   };
+
+    const handleDragEnd = (e: DragEndEvent): void => {
+        setActiveId(null);
++       setOverId(null);
+
+        const activeId = e.active.id.toString();
+        const overId = e.over?.id?.toString();
+        if (overId == null) return;
+
+        // 特定の要素のみ入れ替えを禁止する場合はここで早期returnさせます。
+        // 試しにA1とB1の入れ替えを禁止してみます。
+        if ((activeId === "A1" && overId === "B1") || (activeId === "B1" && overId === "A1")) return;
+
+        swap(activeId, overId);
+    };
+
+    return (
+        <div className="w-full p-5">
+-           <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
++           <DndContext onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+                <Container>
+                    <SortableContext items={columns.map((column) => column.header)} strategy={rectSwappingStrategy}>
+                        {columns.map((column) => (
+                            <SortableColumn key={column.header} header={column.header} />
+                        ))}
+                    </SortableContext>
+                </Container>
+                <DragOverlay>
+                    {activeId != null &&
+                        (columns.some((column) => column.header === activeId) ? (
+                            <DragOverlayColumn header={activeId} />
+                        ) : (
+                            <Item labelText={activeId} className={getItemBgColor(activeId)} />
+                        ))}
+                </DragOverlay>
+            </DndContext>
+        </div>
+    );
+};
+```
+
+最後に、`SortableItem`を書き換えます。
+
+```diff_tsx:SortableItem.tsx
+import { clsx } from "clsx";
+import { useRecoilValue } from "recoil";
+import Item from "./Item";
+import SortableHolder from "../sortableHolder";
+-import { activeIdState } from "../../models/dragTargets";
++import { activeIdState, activeParentIdSelector, overIdState, overParentIdSelector } from "../../models/dragTargets";
+import { getItemBgColor } from "../../util";
+
+type SortableItemProps = {
+    readonly labelText: string;
+};
+
+const SortableItem = ({ labelText }: SortableItemProps): JSX.Element => {
+    const isDragActive = useRecoilValue(activeIdState) === labelText;
++   const isDragOver = useRecoilValue(overIdState) === labelText;
++   const isDraggingBetweenColumns = useRecoilValue(activeParentIdSelector) !== useRecoilValue(overParentIdSelector);
+    return (
+-       <SortableHolder id={labelText} className={clsx(isDragActive && "opacity-0")}>
++       <SortableHolder
++           id={labelText}
++           className={clsx(isDragActive && "opacity-0", isDragOver && isDraggingBetweenColumns && "opacity-50")}
++       >
+            <Item labelText={labelText} className={getItemBgColor(labelText)} />
+        </SortableHolder>
+    );
+};
+
+export default SortableItem;
+```
+
+これでこのようになりました。
+
+<!-- ここに動画 -->
+
+今回は`opacity`をいじりましたが、`brightness`や`box-shadow`あたりを変化させてもいいかもしれません。
