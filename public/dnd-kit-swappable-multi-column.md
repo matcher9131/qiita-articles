@@ -693,3 +693,83 @@ export default SortableItem;
 <!-- ここに動画 -->
 
 今回は`opacity`をいじりましたが、`brightness`や`box-shadow`あたりを変化させてもいいかもしれません。
+
+## `onDragCancel`の実装
+これにて完成！…と言いたいところですが、まだ1つ仕事が残っています。
+
+DnDは **Escキーを押すことでキャンセル** できてその際は当然`onDragEnd`が呼び出されないので、このままだと`activeIdState`や`overIdState`がリセットされず見た目が崩壊します。
+
+`DnDContext`に`onDragcancel`イベントハンドラがあるので、これをちょちょいと実装して解決します。
+
+```diff_tsx:App.tsx(抜粋)
+const App = (): JSX.Element => {
+    const columns = useRecoilValue(containerChildrenState);
+    const { swap } = useContainerChildren();
+    const [activeId, setActiveId] = useRecoilState(activeIdState);
+    const [, setOverId] = useRecoilState(overIdState);
+
+    const handleDragStart = (e: DragStartEvent) => {
+        setActiveId(e.active.id.toString());
+    };
+
+    const handleDragOver = (e: DragOverEvent) => {
+        setOverId(e.over?.id?.toString() ?? null);
+    };
+
++   const handleDragCancel = () => {
++       setActiveId(null);
++       setOverId(null);
++   };
+
+    const handleDragEnd = (e: DragEndEvent): void => {
+        setActiveId(null);
+        setOverId(null);
+
+        const activeId = e.active.id.toString();
+        const overId = e.over?.id?.toString();
+        if (overId == null) return;
+
+        // 特定の要素のみ入れ替えを禁止する場合はここで早期returnさせます。
+        // 試しにA1とB1の入れ替えを禁止してみます。
+        if ((activeId === "A1" && overId === "B1") || (activeId === "B1" && overId === "A1")) return;
+
+        swap(activeId, overId);
+    };
+
+    return (
+        <div className="w-full p-5">
+-           <DndContext onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
++           <DndContext
++               onDragStart={handleDragStart}
++               onDragOver={handleDragOver}
++               onDragCancel={handleDragCancel}
++               onDragEnd={handleDragEnd}
++           >
+                <Container>
+                    <SortableContext items={columns.map((column) => column.header)} strategy={rectSwappingStrategy}>
+                        {columns.map((column) => (
+                            <SortableColumn key={column.header} header={column.header} />
+                        ))}
+                    </SortableContext>
+                </Container>
+                <DragOverlay>
+                    {activeId != null &&
+                        (columns.some((column) => column.header === activeId) ? (
+                            <DragOverlayColumn header={activeId} />
+                        ) : (
+                            <Item labelText={activeId} className={getItemBgColor(activeId)} />
+                        ))}
+                </DragOverlay>
+            </DndContext>
+        </div>
+    );
+};
+```
+
+これにてようやく完成です。お疲れ様でした！
+
+<!-- Sensorの話 -->
+
+## 未解決課題
+### 異`Column`間の`Item`どうしの入れ替えの際に、ドロップされたほうがアニメーションせずに瞬間移動する
+解決策がわかりませんでした…。ご存じの方は教えていただけると幸いです！
