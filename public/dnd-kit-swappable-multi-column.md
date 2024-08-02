@@ -32,6 +32,7 @@ ignorePublish: false
 |react|18.3.1|
 |recoil|0.7.7|
 |tailwindcss|3.4.7|
+|clsx|2.1.1|
 |@dnd-kit/core|6.1.0|
 |@dnd-kit/utilities|3.2.2|
 |@dnd-kit/sortable|8.0.0|
@@ -247,12 +248,9 @@ export default SortableHolder;
 先ほどの`SortableHolder`を用いて各コンポーネントのラッパーを作成します。今度は（コンテナ・プレゼンテーションパターンにおける）コンテナコンポーネントとします。
 
 ```tsx:SortableItem.tsx
-import SortableHolder from "../sortableHolder";
 import Item from "./Item";
-
-const getBgColor = (labelText: string): string => {
-    return labelText.startsWith("A") ? "bg-red-300" : labelText.startsWith("B") ? "bg-green-300" : "bg-blue-300";
-};
+import SortableHolder from "../sortableHolder";
+import { getItemBgColor } from "../../util";
 
 type SortableItemProps = {
     readonly labelText: string;
@@ -261,7 +259,7 @@ type SortableItemProps = {
 const SortableItem = ({ labelText }: SortableItemProps): JSX.Element => {
     return (
         <SortableHolder id={labelText}>
-            <Item labelText={labelText} className={getBgColor(labelText)} />
+            <Item labelText={labelText} className={getItemBgColor(labelText)} />
         </SortableHolder>
     );
 };
@@ -269,7 +267,8 @@ const SortableItem = ({ labelText }: SortableItemProps): JSX.Element => {
 export default SortableItem;
 ```
 
-*Sortable* なコンポーネントは`SortableContext`の内部に置く必要があるため、`Column`の内側に配置します。`items`には内側に入る各コンポーネントを表す *id*（`useSortable`の引数に指定したものと同じ）の配列を、`strategy`には`dnd-kit`側に用意されている変数を指定します。DnDによる並び替えを目的とする場合はデフォルトの`rectSortingStrategy`で大丈夫ですが、今回は並び替えではなく入れ替えなので`rectSwappingStrategy`を指定します。
+*Sortable* なコンポーネントは`SortableContext`の内部に置く必要があるため、`Column`の内側に配置します。`items`には内側に入る各コンポーネントを表す *id*（`useSortable`の引数に指定したものと同じ）の配列[^1]を、`strategy`には`dnd-kit`側に用意されている変数を指定します。DnDによる並び替えを目的とする場合はデフォルトの`rectSortingStrategy`で大丈夫ですが、今回は並び替えではなく入れ替えなので`rectSwappingStrategy`を指定します。
+[^1]: *id* の順序はコンポーネントの順序と揃っている必要があります。なお *id* そのものだけではなく「文字列型または数値型の`id`プロパティを持つオブジェクト」も受け入れるので、コンポーネントに渡すモデルそのものを指定するのも手です。
 
 ```tsx: SortableColumn.tsx
 import { rectSwappingStrategy, SortableContext } from "@dnd-kit/sortable";
@@ -301,7 +300,7 @@ const SortableColumn = ({ header }: SortableColumnProps): JSX.Element => {
 export default SortableColumn;
 ```
 
-これで`App.tsx`を書き換えます。
+`Column`も *Sortable* にしたいので`Container`の内側にも`SortableContext`を配置します。
 
 ```diff_tsx:App.tsx(抜粋)
 const App = (): JSX.Element => {
@@ -431,3 +430,139 @@ const App = (): JSX.Element => {
     );
 };
 ```
+
+## `DragOverlay`の実装
+これでDnDによる入れ替えができるようになりましたが、異なる`Column`間の`Item`を入れ替える際にドラッグしている`Item`が`Column`の外側に出てくれません。（入れ替え自体は成功します。）
+
+<!-- ここに動画 -->
+
+どうやらこの状態では *Sortable* なコンポーネントは直近祖先の`SortableContext`から出られないようです。[^2]
+[^2]: `SortableContext`を`Container`の直下の1つのみにしてしまえば良いと思いきや、`Column`と`Item`が同じ`SortableContext`に属するため（たとえ`onDragEnd`で入れ替えを禁じていても）`Column`と`Item`を入れ替えようとするアニメーションが発生してしまいます。
+
+そこで`DragOverlay`の出番です。`DragOverlay`はドラッグする要素を別途レンダーするためのコンポーネントで、これを使用することでDnDの際の見た目をカスタマイズすることができます。ただし、デフォルトの挙動の一部がなくなるため注意が必要です。
+
+まず、どの要素をDnDしているのかを管理したいので`atom`を追加します。
+
+```tsx:dragTargets.ts
+import { atom } from "recoil";
+
+export const activeIdState = atom<string | null>({ key: "activeIdState", default: null });
+```
+
+`DndContext`の`onDragStart`イベントハンドラでこの`activeIdState`に対象の *id* をセットし、`DragOverlay`で参照してコンポーネントをレンダーします。この際、 *Sortable* なコンポーネントをレンダーするといろいろとややこしくなるため、 *Sortable* ではないものを用います。（`DragOverlayColumn`はそのためのただの`Column`のラッパーです。）
+
+なお`onDragEnd`で`activeIdState`をリセットするのをお忘れなく。
+
+```diff_tsx:App.ts(抜粋)
+const App = (): JSX.Element => {
+    const columns = useRecoilValue(containerChildrenState);
+    const { swap } = useContainerChildren();
++   const [activeId, setActiveId] = useRecoilState(activeIdState);
++
++   const handleDragStart = (e: DragStartEvent) => {
++       setActiveId(e.active.id.toString());
++   };
+
+    const handleDragEnd = (e: DragEndEvent): void => {
++       setActiveId(null);
++
+        const activeId = e.active.id.toString();
+        const overId = e.over?.id?.toString();
+        if (overId == null) return;
+ 
+        // 特定の要素のみ入れ替えを禁止する場合はここで早期returnさせます。
+        // 試しにA1とB1の入れ替えを禁止してみます。
+        if ((activeId === "A1" && overId === "B1") || (activeId === "B1" && overId === "A1")) return;
+ 
+        swap(activeId, overId);
+     };
+
+    return (
+        <div className="w-full p-5">
+-           <DndContext onDragEnd={handleDragEnd}>
++           <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+                <Container>
+                    <SortableContext items={columns.map((column) => column.header)} strategy={rectSwappingStrategy}>
+                        {columns.map((column) => (
+                            <SortableColumn key={column.header} header={column.header} />
+                        ))}
+                    </SortableContext>
++                   <DragOverlay>
++                       {activeId != null &&
++                           (columns.some((column) => column.header === activeId) ? (
++                               <DragOverlayColumn header={activeId} />
++                           ) : (
++                               <Item labelText={activeId} className={getItemBgColor(activeId)} />
++                           ))}
+                    </DragOverlay>
+                </Container>
+            </DndContext>
+        </div>
+    );
+};
+```
+
+これで`Item`が親`Column`から巣立つことができましたが、分身が発生してしまいます。`DragOverlay`は先述の通りあくまでドラッグ中の要素を **別途に** レンダーするだけなので、元々の要素が残ってしまいます。
+
+流石にこれではみっともないので、`SortableItem`と`SortableColumn`を修正してドラッグ対象となるものは表示しないようにします。
+
+```diff_tsx:SortableItem.tsx
++import clsx from "clsx";
++import { useRecoilValue } from "recoil";
+import Item from "./Item";
+import SortableHolder from "../sortableHolder";
++import { activeIdState } from "../../models/dragTargets";
+import { getItemBgColor } from "../../util";
+
+type SortableItemProps = {
+    readonly labelText: string;
+};
+
+const SortableItem = ({ labelText }: SortableItemProps): JSX.Element => {
++   const isDragActive = useRecoilValue(activeIdState) === labelText;
+    return (
+-       <SortableHolder id={labelText}>
++       <SortableHolder id={labelText} className={clsx(isDragActive && "opacity-0")}>
+            <Item labelText={labelText} className={getItemBgColor(labelText)} />
+        </SortableHolder>
+    );
+};
+
+export default SortableItem;
+```
+
+```diff_tsx:SortableColumn.tsx
+import { rectSwappingStrategy, SortableContext } from "@dnd-kit/sortable";
++import { clsx } from "clsx";
+import { useRecoilValue } from "recoil";
+import Column from "./Column";
+import SortableHolder from "../sortableHolder";
+import SortableItem from "../item/SortableItem";
+import { columnChildrenSelector } from "../../models/containerChildren";
++import { activeIdState } from "../../models/dragTargets";
+
+type SortableColumnProps = {
+    readonly header: string;
+};
+
+const SortableColumn = ({ header }: SortableColumnProps): JSX.Element => {
+    const items = useRecoilValue(columnChildrenSelector(header));
++   const isDragActive = useRecoilValue(activeIdState) === header;
+    return (
+-       <SortableHolder id={header} className="flex-1">
++       <SortableHolder id={header} className={clsx("flex-1", isDragActive && "opacity-0")}>
+            <Column header={header}>
+                <SortableContext items={items} strategy={rectSwappingStrategy}>
+                    {items.map((labelText) => (
+                        <SortableItem key={labelText} labelText={labelText} />
+                    ))}
+                </SortableContext>
+            </Column>
+        </SortableHolder>
+    );
+};
+
+export default SortableColumn;
+```
+
+<!-- TODO: overにopacity-50 -->
