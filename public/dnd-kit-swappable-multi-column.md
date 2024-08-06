@@ -11,8 +11,8 @@ organization_url_name: null
 slide: false
 ignorePublish: false
 ---
-# `dnd-kit`でアイテムもカラムもswappableなマルチカラムを実装してみた
-`React`にてドラッグアンドドロップ（以下DnDと表記します）を実装するライブラリである[dnd-kit](https://dndkit.com/)を用いて、DnDによって
+# dnd-kitでアイテムもカラムもswappableなマルチカラムを実装してみた
+Reactにてドラッグアンドドロップ（以下DnDと表記します）を実装するライブラリである[dnd-kit](https://dndkit.com/)を用いて、DnDによって
 
 - カラムどうしの入れ替え
 - 同カラム内のアイテムどうしの入れ替え
@@ -37,7 +37,7 @@ ignorePublish: false
 |@dnd-kit/utilities|3.2.2|
 |@dnd-kit/sortable|8.0.0|
 
-## `dnd-kit`のインストール
+## dnd-kitのインストール
 ルートディレクトリで以下を実行します。今回は要素同士の並び替えを実装したいので、`sortable`パッケージもインストールします。
 
 ```bash
@@ -47,7 +47,7 @@ npm install @dnd-kit/core @dnd-kit/utilities @dnd-kit/sortable
 （他のパッケージのインストールに関しては本記事の主内容から逸れるため省略させていただきます。）
 
 ## 状態管理
-今回は状態管理を`Recoil`に任せます。勿論どの状態管理ライブラリでも大差ないので、他のものをお使いの方は適宜読み替えてください。
+今回は状態管理をRecoilに任せます。勿論どの状態管理ライブラリでも大差ないので、他のものをお使いの方は適宜読み替えてください。
 
 どのカラム内にどのアイテムがあるのかを管理するために以下の`atom`を作り、初期状態を適当に`default`にぶち込みます。
 さらに指定した`header`を持つカラムの`items`を返す`selectorFamily`も用意しておきます。
@@ -165,9 +165,9 @@ const App = (): JSX.Element => {
 これをベースとして、DnD機能を実装していきます。
 
 ## `DndContext`の追加
-`dnd-kit`では *Draggable* コンポーネント（ドラッグする要素）と *Droppable* コンポーネント（ドラッグ要素を受け付ける要素）を実装することでDnDを実現しますが、それらの`Context Provider`として親に`DndContext`を置く必要があります。
+dnd-kitでは *Draggable* コンポーネント（ドラッグする要素）と *Droppable* コンポーネント（ドラッグ要素を受け付ける要素）を実装することでDnDを実現しますが、それらの`Context Provider`として親に`DndContext`を置く必要があります。
 
-加えて、`dnd-kit`で提供される機能はあくまでDnDによる見た目の変化を担うものであり、実際のデータの変化などに関してはDnD終了時に呼び出される`DndContext`の`onDragEnd`イベントハンドラに記述する必要があります。が、解説の都合で今は`undefined`にしておきます。
+加えて、dnd-kitで提供される機能はあくまでDnDによる見た目の変化を担うものであり、実際のデータの変化などに関してはDnD終了時に呼び出される`DndContext`の`onDragEnd`イベントハンドラに記述する必要があります。が、解説の都合で今は`undefined`にしておきます。
 
 ```diff_tsx:App.tsx(抜粋)
 const App = (): JSX.Element => {
@@ -192,7 +192,7 @@ const App = (): JSX.Element => {
 ```
 
 ## `useSortable`
-`dnd-kit`においては`useDraggable`フックにて *Draggable* コンポーネントを、`useDroppable`フックにて *Droppable* コンポーネントを作成できますが、今回作る入れ替え可能な要素のように *Draggable* かつ *Droppable* なコンポーネントには`useSortable`フックを使います。使い方としては
+dnd-kitにおいては`useDraggable`フックにて *Draggable* コンポーネントを、`useDroppable`フックにて *Droppable* コンポーネントを作成できますが、今回作る入れ替え可能な要素のように *Draggable* かつ *Droppable* なコンポーネントには`useSortable`フックを使います。使い方としては
 
 1. `useSortable`フックを使用して必要なプロパティを取得
 1. 1.の一部を用いて`CSS style object`を作成
