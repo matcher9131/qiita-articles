@@ -18,7 +18,7 @@ HTMLでいくつかの与えられた候補から1つの値を選ぶときは`<s
 
 今の時代流石にこれでは不便すぎる、ということで標準のHTMLでも入力内容に応じて候補がドロップダウンで表示されて選択できるシステムは実装されており、`<input>`と`<datalist>`の組み合わせがそれに当たります。
 
-ですがこの`<datalist>`…まったくもって日本語フレンドリーではないんですよね。[^1]
+ですがこの`<datalist>`……まったくもって日本語フレンドリーではないんですよね。[^1]
 [^1]: 中国語も変換が必要なので漢字フレンドリーではないと言ったほうが正しいかもしれない。
 
 <!-- ここにdatalistの動画 -->
@@ -96,3 +96,15 @@ export const isEevee = (s: string): s is Eevee => {
 [^3]: これでブイズが増えても安心！（意訳：新しいブイズの追加はよ）
 
 さらに、与えられた文字列がユニオン型`Eevee`のいずれかに一致するかを判定するカスタム型ガード関数を実装しておきます。
+
+## 状態管理
+今回も状態管理にRecoilを使います。例によって他の状態管理ライブラリを使っている方は適宜読み替えてください。
+
+ユーザーが選んだ値を管理する`atom`を作ります。複数の`SuggestionInput`を使用する可能性を考え、key-valueのペアで管理します。
+
+```typescript:models/states.ts
+import { atomFamily } from "recoil";
+import { Eevee } from "./types";
+
+export const eeveeStates = atomFamily<Eevee, string>({ key: "eeveeStates", default: "イーブイ" });
+```
