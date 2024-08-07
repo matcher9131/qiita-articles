@@ -120,13 +120,11 @@ export const eeveeState = atomFamily<Eevee, string>({ key: "eeveeState", default
 いよいよコンポーネント本体に取り掛かります。
 
 ### daisyUIのDropdownコンポーネント
-先述の通り、ドロップダウン部分にはdaisyUIの[Dropdown](https://daisyui.com/components/dropdown/)コンポーネントを用います。使い方としては
+先述の通り、ドロップダウン部分にはdaisyUIの[Dropdown](https://daisyui.com/components/dropdown/)コンポーネントを用います。使い方としては以下の通りです。
 
 - root要素のクラスに`dropdown`を指定する。
 - root直下の最初の子要素にドロップダウンの親要素を置く。
 - ドロップダウンの親要素と同じ階層にドロップダウン本体を置き、クラスに`dropdown-content`を、`tabindex`属性に`0`を指定する。
-
-といった具合です。親要素として（フォーカスを得られる）どんな要素でも指定できる点が優秀です。
 
 ```html
 <div class="dropdown">
@@ -139,6 +137,8 @@ export const eeveeState = atomFamily<Eevee, string>({ key: "eeveeState", default
     </ul>
 </div>
 ```
+
+root以下がフォーカスを得るとドロップダウンが表示され、フォーカスを失うとドロップダウンが非表示になるという振る舞いをCSSのみで実現しています。よってドロップダウンの親要素として（フォーカスを得られる）どんな要素でも指定できます。
 
 ### 叩き台の作成
 先ほど作った`suggestInputValueState`とこのDropdownコンポーネントを用いて、ひとまず叩き台を作ります。まだサジェストの絞り込みや選択時の動作は実装していません。
@@ -195,11 +195,11 @@ export default SuggestionInput;
 ```
 
 ### サジェストの絞り込み
-入力内容に応じて適切なサジェストを表示するようにします。
+まずは入力内容に応じて適切なサジェストを表示するようにします。
 
 今回は単純に入力内容と同じ文字列がサジェスト候補の`value`または`furigana`に含まれるかどうかで判定します。
 （入力内容を分割した部分一致、すなわち「エフ」が「エーフィ」に反応するような判定はしません。）  
-利便性を考慮し、サジェストの表示順は完全一致→前方一致→前方一致ではない部分一致（同カテゴリ内では元の表示順）とします。
+利便性を考慮し、サジェストの表示順は完全一致→前方一致→部分一致（同カテゴリ内では元の表示順）とします。
 
 まずは判定の関数を作り、
 
@@ -234,5 +234,59 @@ const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         setValue(newValue);
     }
 +    setSuggestions(filterSuggestions(dataList, newValue));
+};
+```
+
+### サジェストをクリックしたときの動作
+次にサジェストをクリックしたときに、`<input>`の内容およびユーザーが選んだ値を管理するstateを更新するようにします。
+
+`handleSuggestionClick`をカリー化しておき、イベントハンドラを指定する際に`suggestion`を部分適用して呼び出せるようにします。
+
+関数の中身は単に`setValue`と`setInputValue`を呼び出すだけです。ついでに`document.activeElement.blur()`を呼び出してフォーカスを失わせることでドロップダウンを非表示にします。
+
+```diff_tsx:components/SuggestionInput.tsx(抜粋)
+const SuggestionInput = <T extends string>({
+    id,
+    dataList,
+    setValue,
+    validateValue,
+}: SuggestionInputProps<T>): JSX.Element => {
+    const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
+    const [suggestions, setSuggestions] = useState<readonly T[]>(dataList.map((data) => data.value));
+
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        setInputValue(newValue);
+        if (validateValue(newValue)) {
+            setValue(newValue);
+        }
+        setSuggestions(filterSuggestions(dataList, newValue));
+    };
+
++    const handleSuggestionClick = (suggestion: T) => () => {
++        setValue(suggestion);
++        setInputValue(suggestion);
++        // ドロップダウンを閉じる
++        (document.activeElement as HTMLElement | null)?.blur();
++    };
+
+    return (
+        <div className="dropdown">
+            <input value={inputValue} onChange={handleChange} className="input input-bordered input-sm" />
+            <ul tabIndex={0} className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow">
+                {suggestions.map((suggestion) => (
+                    <li key={suggestion}>
+-                        <button className="btn btn-sm w-full justify-start">{suggestion}</button>
++                        <button
++                            onClick={handleSuggestionClick(suggestion)}
++                            className="btn btn-sm w-full justify-start"
++                        >
++                            {suggestion}
++                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
 };
 ```
