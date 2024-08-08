@@ -171,7 +171,7 @@ const SuggestionInput = <T extends string>({
     validateValue,
 }: SuggestionInputProps<T>): JSX.Element => {
     const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
-    const [suggestions, setSuggestions] = useState<readonly T[]>(dataList.map((data) => data.value));
+    const [suggestions, setSuggestions] = useState(dataList.map((data) => data.value));
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         const newValue = e.target.value;
@@ -183,8 +183,15 @@ const SuggestionInput = <T extends string>({
 
     return (
         <div className="dropdown">
-            <input value={inputValue} onChange={handleChange} className="input input-bordered input-sm" />
-            <ul tabIndex={0} className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow">
+            <input
+                value={inputValue}
+                onChange={handleChange}
+                className="input input-bordered input-sm"
+            />
+            <ul
+                tabIndex={0}
+                className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow"
+            >
                 {suggestions.map((suggestion) => (
                     <li key={suggestion}>
                         <button className="btn btn-sm w-full justify-start">{suggestion}</button>
@@ -256,7 +263,7 @@ const SuggestionInput = <T extends string>({
     validateValue,
 }: SuggestionInputProps<T>): JSX.Element => {
     const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
-    const [suggestions, setSuggestions] = useState<readonly T[]>(dataList.map((data) => data.value));
+    const [suggestions, setSuggestions] = useState(dataList.map((data) => data.value));
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         const newValue = e.target.value;
@@ -276,8 +283,15 @@ const SuggestionInput = <T extends string>({
 
     return (
         <div className="dropdown">
-            <input value={inputValue} onChange={handleChange} className="input input-bordered input-sm" />
-            <ul tabIndex={0} className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow">
+            <input
+                value={inputValue}
+                onChange={handleChange}
+                className="input input-bordered input-sm"
+            />
+            <ul
+                tabIndex={0}
+                className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow"
+            >
                 {suggestions.map((suggestion) => (
                     <li key={suggestion}>
 -                        <button className="btn btn-sm w-full justify-start">{suggestion}</button>
@@ -295,7 +309,7 @@ const SuggestionInput = <T extends string>({
 };
 ```
 
-### `onBlur`の実装
+### 入力内容の矯正
 ここまでで概ね目的は達成していますが、さらなるブラッシュアップを考えます。
 
 今回は「ユーザーが選ぶ値は必ずこちらで用意した候補に一致する必要がある」としていますが、`<input>`が自由に入力できるため、ユーザーが選択した値と`<input>`の内容が一致しないケースがどうしても出てきます。
@@ -322,7 +336,7 @@ const SuggestionInput = <T extends string>({
     validateValue,
 }: SuggestionInputProps<T>): JSX.Element => {
     const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
-    const [suggestions, setSuggestions] = useState<readonly T[]>(dataList.map((data) => data.value));
+    const [suggestions, setSuggestions] = useState(dataList.map((data) => data.value));
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         const newValue = e.target.value;
@@ -347,14 +361,16 @@ const SuggestionInput = <T extends string>({
 
     return (
         <div className="dropdown">
--            <input value={inputValue} onChange={handleChange} className="input input-bordered input-sm" />
-+            <input
-+                value={inputValue}
-+                onChange={handleChange}
+            <input
+                value={inputValue}
+                onChange={handleChange}
 +                onBlur={handleBlur}
-+                className="input input-bordered input-sm"
-+            />
-            <ul tabIndex={0} className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow">
+                className="input input-bordered input-sm"
+            />
+            <ul
+                tabIndex={0}
+                className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow"
+            >
                 {suggestions.map((suggestion) => (
                     <li key={suggestion}>
                         <button onClick={handleSuggestionClick(suggestion)} className="btn btn-sm w-full justify-start">
@@ -384,7 +400,7 @@ const SuggestionInput = <T extends string>({
     validateValue,
 }: SuggestionInputProps<T>): JSX.Element => {
     const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
-    const [suggestions, setSuggestions] = useState<readonly T[]>(dataList.map((data) => data.value));
+    const [suggestions, setSuggestions] = useState(dataList.map((data) => data.value));
 +    const selectedValueRef = useRef(selectedValue);
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -410,15 +426,65 @@ const SuggestionInput = <T extends string>({
         (document.activeElement as HTMLElement | null)?.blur();
     };
 
+    return (省略)
+};
+```
+
+### 再選択時の利便性の向上
+ユーザーが何度も選択内容を変えるような使い方が想定される場合、入力内容を全選択して消してからでないとサジェストが表示されないというのは不便です。よってフォーカスを得た瞬間は入力内容に関係なく全サジェストを表示することにします。ついでにテキストを全選択する手間も省いておきましょう。
+
+```
+const SuggestionInput = <T extends string>({
+    id,
+    dataList,
+    selectedValue,
+    setSelectedValue,
+    validateValue,
+}: SuggestionInputProps<T>): JSX.Element => {
+    const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
+    const [suggestions, setSuggestions] = useState(dataList.map((data) => data.value));
+    const selectedValueRef = useRef(selectedValue);
+
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        setInputValue(newValue);
+        if (validateValue(newValue)) {
+            setSelectedValue(newValue);
+        }
+        setSuggestions(filterSuggestions(dataList, newValue));
+    };
+
++    const handleFocus = (e: FocusEvent<HTMLInputElement>) => {
++       e.target.select();
++       setSuggestions(filterSuggestions(dataList, ""));
++   };
+
+    const handleBlur = () => {
+        if (!validateValue(inputValue)) {
+            setInputValue(selectedValueRef.current);
+        }
+    };
+
+    const handleSuggestionClick = (suggestion: T) => () => {
+        setSelectedValue(suggestion);
+        setInputValue(suggestion);
+        selectedValueRef.current = suggestion;
+        (document.activeElement as HTMLElement | null)?.blur();
+    };
+
     return (
         <div className="dropdown">
             <input
                 value={inputValue}
                 onChange={handleChange}
++                onFocus={handleFocus}
                 onBlur={handleBlur}
                 className="input input-bordered input-sm"
             />
-            <ul tabIndex={0} className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow">
+            <ul
+                tabIndex={0}
+                className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow"
+            >
                 {suggestions.map((suggestion) => (
                     <li key={suggestion}>
                         <button
