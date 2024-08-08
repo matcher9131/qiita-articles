@@ -27,6 +27,9 @@ HTMLでいくつかの与えられた候補から1つの値を選ぶときは`<s
 
 ということで、ふりがなでもサジェストを表示できる`<input>`、名付けて`SuggestionInput`を作ります。
 
+※ 今回は「ユーザーが選ぶ値は必ずこちらで用意した候補に一致する必要がある」ケースを想定しています。[^2]
+[^2]: 「サジェストは表示するが、入力内容はユーザーに任せる」ケースはこれより緩いので、適当にいじっていただければ…
+
 ## 使用パッケージ
 いずれも記事執筆時点での最新です。
 |パッケージ|バージョン|
@@ -91,9 +94,10 @@ export const isEevee = (s: string): s is Eevee => {
 };
 ```
 
-今回の目的である「変換前の文字（ふりがな）にも反応するサジェスト」を達成するために、値の候補（変数`eevees`）は「値そのものである`value`プロパティとふりがなを示す`furigana`プロパティからなるオブジェクト」の配列として定義します。この配列を元にユーザーが選ぶべき1つの値を表すユニオン型（型`Eevee`）を作ることで、候補が増えたときに2重に管理する手間を省きます。[^2][^3]
-[^2]: ここの型テクニックがよくわからない！という方は[配列から型を生成する | TypeScript入門『サバイバルTypeScript』](https://typescriptbook.jp/tips/generates-type-from-array)をご覧ください。
-[^3]: これでブイズが増えても安心！（意訳：新しいブイズの追加はよ）
+今回の目的である「変換前の文字（ふりがな）にも反応するサジェスト」を達成するために、値の候補（変数`eevees`）は「値そのものである`value`プロパティとふりがなを示す`furigana`プロパティからなるオブジェクト」の配列として定義します。[^3]この配列を元にユーザーが選ぶべき1つの値を表すユニオン型（型`Eevee`）を作ることで、候補が増えたときに2重に管理する手間を省きます。[^4][^5]
+[^3]: 値がカタカナばかりになっていますが、もちろん漢字かな交じりでも`furigana`を正しく設定すれば問題ありません。
+[^4]: ここの型テクニックがよくわからない！という方は[配列から型を生成する | TypeScript入門『サバイバルTypeScript』](https://typescriptbook.jp/tips/generates-type-from-array)をご覧ください。
+[^5]: これでブイズが増えても安心！（意訳：新しいブイズの追加はよ）
 
 さらに、与えられた文字列がユニオン型`Eevee`のいずれかに一致するかを判定するカスタム型ガード関数を実装しておきます。
 
@@ -144,9 +148,9 @@ root以下がフォーカスを得るとドロップダウンが表示され、�
 先ほど作った`suggestInputValueState`とこのDropdownコンポーネントを用いて、ひとまず叩き台を作ります。まだサジェストの絞り込みや選択時の動作は実装していません。
 
 今回はユーザーに選んでもらう値として`Eevee`型しか用意していませんが、実際には複数種類の値の選択をすることもあるので、
-型引数を与え、サジェスト候補の`dataList`やユーザーが選んだ値をセットする関数`setValue`を外から`props`経由で渡すようにします。
+型引数を与え、サジェスト候補の`dataList`やユーザーが選んだ値をセットする関数`setSelectedValue`を外から`props`経由で渡すようにします。
 
-さらに関数`validateValue`も`props`経由で渡して、ユーザーが（サジェストに関係なく）選ぶべき値と一致する入力をした際に`setValue`を呼ぶようにします。
+さらに関数`validateValue`も`props`経由で渡して、ユーザーが（サジェストに関係なく）選ぶべき値と一致する入力をした際に`setSelectedValue`を呼ぶようにします。
 
 ```tsx:components/SuggestionInput.tsx
 import { useState, type ChangeEvent } from "react";
@@ -156,14 +160,14 @@ import { suggestInputValueState } from "../models/states";
 type SuggestionInputProps<T extends string> = {
     readonly id: string;
     readonly dataList: ReadonlyArray<{ readonly value: T; readonly furigana: string }>;
-    readonly setValue: (newValue: T) => void;
+    readonly setSelectedValue: (newValue: T) => void;
     readonly validateValue: (s: string) => s is T;
 };
 
 const SuggestionInput = <T extends string>({
     id,
     dataList,
-    setValue,
+    setSelectedValue,
     validateValue,
 }: SuggestionInputProps<T>): JSX.Element => {
     const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
@@ -173,7 +177,7 @@ const SuggestionInput = <T extends string>({
         const newValue = e.target.value;
         setInputValue(newValue);
         if (validateValue(newValue)) {
-            setValue(newValue);
+            setSelectedValue(newValue);
         }
     };
 
@@ -231,7 +235,7 @@ const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
     if (validateValue(newValue)) {
-        setValue(newValue);
+        setSelectedValue(newValue);
     }
 +    setSuggestions(filterSuggestions(dataList, newValue));
 };
@@ -242,13 +246,13 @@ const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
 
 `handleSuggestionClick`をカリー化しておき、イベントハンドラを指定する際に`suggestion`を部分適用して呼び出せるようにします。
 
-関数の中身は単に`setValue`と`setInputValue`を呼び出すだけです。ついでに`document.activeElement.blur()`を呼び出してフォーカスを失わせることでドロップダウンを非表示にします。
+関数の中身は単に`setSelectedValue`と`setInputValue`を呼び出すだけです。ついでに`document.activeElement.blur()`を呼び出してフォーカスを失わせることでドロップダウンを非表示にします。
 
 ```diff_tsx:components/SuggestionInput.tsx(抜粋)
 const SuggestionInput = <T extends string>({
     id,
     dataList,
-    setValue,
+    setSelectedValue,
     validateValue,
 }: SuggestionInputProps<T>): JSX.Element => {
     const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
@@ -258,13 +262,13 @@ const SuggestionInput = <T extends string>({
         const newValue = e.target.value;
         setInputValue(newValue);
         if (validateValue(newValue)) {
-            setValue(newValue);
+            setSelectedValue(newValue);
         }
         setSuggestions(filterSuggestions(dataList, newValue));
     };
 
 +    const handleSuggestionClick = (suggestion: T) => () => {
-+        setValue(suggestion);
++        setSelectedValue(suggestion);
 +        setInputValue(suggestion);
 +        // ドロップダウンを閉じる
 +        (document.activeElement as HTMLElement | null)?.blur();
@@ -283,6 +287,146 @@ const SuggestionInput = <T extends string>({
 +                        >
 +                            {suggestion}
 +                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+};
+```
+
+### `onBlur`の実装
+ここまでで概ね目的は達成していますが、さらなるブラッシュアップを考えます。
+
+今回は「ユーザーが選ぶ値は必ずこちらで用意した候補に一致する必要がある」としていますが、`<input>`が自由に入力できるため、ユーザーが選択した値と`<input>`の内容が一致しないケースがどうしても出てきます。
+
+入力中以外は両者を一致させたいので、`SuggestionInput`がフォーカスを失った時に`<input>`の内容を矯正する方針にします。具体的には`<input>`の`onBlur`イベントハンドラを実装し、入力文字列が値の候補のいずれとも一致しない場合、最後に選択した値を表示するようにします。[^6]
+[^6]: ここは場合によりけりで、「常にデフォルト値に矯正」や「入力文字列と最もよく一致する値に矯正」なども考えられます。
+
+しかし現状`SuggestionInput`はユーザーが選択した値を知る術がないので、これも`props`経由で外部から与えます。
+
+```diff_tsx:components/SuggestionInput.tsx(抜粋)
+type SuggestionInputProps<T extends string> = {
+    readonly id: string;
+    readonly dataList: ReadonlyArray<{ readonly value: T; readonly furigana: string }>;
++    readonly selectedValue: T;
+    readonly setSelectedValue: (newValue: T) => void;
+    readonly validateValue: (s: string) => s is T;
+};
+
+const SuggestionInput = <T extends string>({
+    id,
+    dataList,
++    selectedValue,
+    setSelectedValue,
+    validateValue,
+}: SuggestionInputProps<T>): JSX.Element => {
+    const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
+    const [suggestions, setSuggestions] = useState<readonly T[]>(dataList.map((data) => data.value));
+
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        setInputValue(newValue);
+        if (validateValue(newValue)) {
+            setSelectedValue(newValue);
+        }
+        setSuggestions(filterSuggestions(dataList, newValue));
+    };
+
++    const handleBlur = () => {
++        if (!validateValue(inputValue)) {
++            setInputValue(selectedValue);
++        }
++    };
+
+    const handleSuggestionClick = (suggestion: T) => () => {
+        setSelectedValue(suggestion);
+        setInputValue(suggestion);
+        (document.activeElement as HTMLElement | null)?.blur();
+    };
+
+    return (
+        <div className="dropdown">
+-            <input value={inputValue} onChange={handleChange} className="input input-bordered input-sm" />
++            <input
++                value={inputValue}
++                onChange={handleChange}
++                onBlur={handleBlur}
++                className="input input-bordered input-sm"
++            />
+            <ul tabIndex={0} className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow">
+                {suggestions.map((suggestion) => (
+                    <li key={suggestion}>
+                        <button onClick={handleSuggestionClick(suggestion)} className="btn btn-sm w-full justify-start">
+                            {suggestion}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+};
+```
+
+これで一旦目的は果たせていますが、サジェストをクリックすると一瞬だけ直前に選んだ値が表示されてから新たな値に矯正されます。具体的には、「エーフィ」を選択してから入力内容を消してサジェストから「ブラッキー」を選択すると、一瞬だけ「エーフィ」が表示されてから「ブラッキー」が表示されます。
+
+これはイベントの順序が`<input>のonBlur`→`<button>のonClick`となっているためです。イベントの順序を操作することはできませんが、`onClick`の代わりに`onMouseDown`にすれば`onBlur`より発生が早くなるので、ディテールにこだわる場合はこちらを採用します。[^7]
+[^7]: 当然ながら`MouseDown`で処理をするということは`MouseUp`を待たなくなるため、操作感が変わる点には注意が必要です。
+
+ただし`onMouseDown`を採用した場合、`<button>のonMouseDown`→`<input>のonBlur`の間は再レンダリングが起きないため`selectedValue`が1つ前の値を参照してしまう、すなわち上記の例だと「ブラッキーを選択したのに表示がエーフィのまま」となってしまいます。これを回避するために`useRef`を用いて`selectedValueRef`を作り、`<button>のonMouseDown`で更新してから`<input>のonBlur`で参照することにします。
+
+```diff_tsx:components/SuggestionInput.tsx(抜粋)
+const SuggestionInput = <T extends string>({
+    id,
+    dataList,
+    selectedValue,
+    setSelectedValue,
+    validateValue,
+}: SuggestionInputProps<T>): JSX.Element => {
+    const [inputValue, setInputValue] = useRecoilState(suggestInputValueState(id));
+    const [suggestions, setSuggestions] = useState<readonly T[]>(dataList.map((data) => data.value));
++    const selectedValueRef = useRef(selectedValue);
+
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        setInputValue(newValue);
+        if (validateValue(newValue)) {
+            setSelectedValue(newValue);
+        }
+        setSuggestions(filterSuggestions(dataList, newValue));
+    };
+
+    const handleBlur = () => {
+        if (!validateValue(inputValue)) {
+-            setInputValue(selectedValue);
++            setInputValue(selectedValueRef.current);
+        }
+    };
+
+    const handleSuggestionClick = (suggestion: T) => () => {
+        setSelectedValue(suggestion);
+        setInputValue(suggestion);
++        selectedValueRef.current = suggestion;
+        (document.activeElement as HTMLElement | null)?.blur();
+    };
+
+    return (
+        <div className="dropdown">
+            <input
+                value={inputValue}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                className="input input-bordered input-sm"
+            />
+            <ul tabIndex={0} className="dropdown-content max-h-60 z-10 overflow-auto bg-base-200 p-2 shadow">
+                {suggestions.map((suggestion) => (
+                    <li key={suggestion}>
+                        <button
+                            onMouseDown={handleSuggestionClick(suggestion)}
+                            className="btn btn-sm w-full justify-start"
+                        >
+                            {suggestion}
+                        </button>
                     </li>
                 ))}
             </ul>
