@@ -1,5 +1,5 @@
 ---
-title: suggestion-input
+title: Reactでふりがなでもサジェストを表示できるinputを実装してみた
 tags:
   - HTML
   - React
