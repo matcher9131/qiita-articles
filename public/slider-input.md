@@ -65,7 +65,7 @@ export const valueState = atomFamily<number, string>({ key: "valueState", defaul
 ```
 
 ## Utilの実装
-いくつか便利関数を用意しておきます。
+便利関数を用意しておきます。
 
 - `parseNumberOrNull`: 文字列を数値に変換しますが、変換に失敗したときは`NaN`ではなく`null`を返します。
     - Null合体演算子`??`を使うことで変数宣言や`if`文を無くして記述量を減らす狙いです。
@@ -85,7 +85,7 @@ export const withinRange = (x: number, min: number, max: number): number => {
 ```
 
 ## コンポーネントの実装
-<!-- ここにbuttonsとかの説明 -->
+ではコンポーネントを実装していきます。ついでに最小値、デフォルト値、最大値をすぐに選択できるボタンも作っておきます。
 
 ```tsx:SliderInput.tsx(抜粋)
 type SliderInputProps = {
@@ -93,15 +93,15 @@ type SliderInputProps = {
     readonly defaultValue: number;
     readonly minValue: number;
     readonly maxValue: number;
-    readonly step?: number;
+    readonly step?: number | string;
 };
 
 const SliderInput = ({ id, defaultValue, minValue, maxValue }: SliderInputProps): JSX.Element => {
-    const [value, setValue] = useRecoilState(valueNoRefState(id));
-    const [valueRaw, setValueRaw] = useState(`${defaultValue}`);
+    const [value, setValue] = useRecoilState(valueState(id));
+    const [text, setText] = useState(`${defaultValue}`);
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
-        setValueRaw(e.target.value);
+        setText(e.target.value);
         const tempValue = parseNumberOrNull(e.target.value);
         if (tempValue != null) {
             const newValue = withinRange(tempValue, minValue, maxValue);
@@ -112,18 +112,18 @@ const SliderInput = ({ id, defaultValue, minValue, maxValue }: SliderInputProps)
     const handleInputBlur = (e: FocusEvent<HTMLInputElement>): void => {
         const newValue = withinRange(parseNumberOrNull(e.target.value) ?? defaultValue, minValue, maxValue);
         setValue(newValue);
-        setValueRaw(`${newValue}`);
+        setText(`${newValue}`);
     };
 
     const handleButtonClick = (x: number) => (): void => {
         setValue(x);
-        setValueRaw(`${x}`);
+        setText(`${x}`);
     };
 
     const handleRangeChange = (e: ChangeEvent<HTMLInputElement>): void => {
         const newValue = parseNumberOrNull(e.target.value) ?? defaultValue;
         setValue(newValue);
-        setValueRaw(`${newValue}`);
+        setText(`${newValue}`);
     };
 
     return (
@@ -131,7 +131,7 @@ const SliderInput = ({ id, defaultValue, minValue, maxValue }: SliderInputProps)
             <div className="inline-flex flex-row items-center gap-x-1">
                 <input
                     type="number"
-                    value={valueRaw}
+                    value={text}
                     min={minValue}
                     max={maxValue}
                     step={step}
