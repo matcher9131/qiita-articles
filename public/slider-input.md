@@ -68,7 +68,8 @@ export const valueState = atomFamily<number, string>({ key: "valueState", defaul
 いくつか便利関数を用意しておきます。
 
 - `parseNumberOrNull`: 文字列を数値に変換しますが、変換に失敗したときは`NaN`ではなく`null`を返します。
-- `withinRange`: 与えられた数値を、`min`以上`max`未満になるよう最も近い値に矯正します。
+    - Null合体演算子`??`を使うことで変数宣言や`if`文を無くして記述量を減らす狙いです。
+- `withinRange`: 与えられた数値を、`min`以上`max`以下になるよう最も近い値に矯正します。
 
 ```typescript:util.ts
 export const parseNumberOrNull = (s: string): number | null => {
@@ -131,8 +132,9 @@ const SliderInput = ({ id, defaultValue, minValue, maxValue }: SliderInputProps)
                 <input
                     type="number"
                     value={valueRaw}
-                    max={maxValue}
                     min={minValue}
+                    max={maxValue}
+                    step={step}
                     onChange={handleInputChange}
                     onBlur={handleInputBlur}
                     className="input input-bordered input-sm text-right"
