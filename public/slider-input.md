@@ -21,7 +21,7 @@ HTMLでユーザーに数値を指定させるときに使う要素としては`
 
 しかしこの2つを組み合わせればお互いの欠点を補えるため、非常に利便性の高いコンポーネントになるはずです。
 
-というわけでReactでこれを作ってみました。
+というわけでReactでこれを作ってみました。名付けて、`SliderInput`！
 
 ## 使用パッケージ
 いずれも記事執筆時点での最新です。
@@ -38,15 +38,126 @@ HTMLでユーザーに数値を指定させるときに使う要素としては`
 
 ※ `atom`はユーザーが指定した数値を状態に持つ変数を示します。
 
+- 2つの`<input>`は制御コンポーネントとする
 - `<input type="range">`の値が変更されたとき
-  - `<input type="number">`および`atom`の内容を更新する
+    - `<input type="number">`の内容および`atom`の値を更新する
 - `<input type="number">`が入力中のとき
-  - 入力内容が数値として解釈できる場合のみ`<input type="range">`の値を更新する
-    - ただし値が`max`を超えている場合は`max`に、`min`未満の場合は`min`に矯正する
-  - `atom`は更新しない
-- `<input type="number">`からフォーカスが失われたとき、
-  - 内容が数値として解釈できない場合、`defaultValue`に矯正する
-  - 内容が数値として解釈できる場合、`max`を超えている場合は`max`に、`min`未満の場合は`min`に矯正する
-  - `atom`を矯正後の値で更新する
+    - 入力内容が数値として解釈できる場合のみ`<input type="range">`のおよび`atom`の値を更新する
+        - ただし値が`max`を超えている場合は`max`に、`min`未満の場合は`min`に矯正する
+- `<input type="number">`からフォーカスが失われたとき
+    - 内容が数値として解釈できない場合、`defaultValue`に矯正する
+    - 内容が数値として解釈できる場合、`max`を超えている場合は`max`に、`min`未満の場合は`min`に矯正する
+    - `atom`を矯正後の値で更新する
 - `<input type="number">`のスピンボタンが押されたとき
-  - `<input type="range">`および`atom`の内容を更新する
+    - `<input type="range">`および`atom`の値を更新する
+
+ポイントとして、`<input type="number">`が入力中のときは入力内容の矯正を行わないようにします。これは空文字列を含め、入力中の数値が必ず`min`以上`max`以下の範囲に収まるわけではないためです。
+（例として`min`が`10`のとき、`30`を入力しようとして`3`を入力した時点では`min`以上を満たしていません。）
+ただし勿論そのまま放置するとどんな値でも入力できてしまうので、入力完了＝`onBlur`のタイミングで矯正します。
+
+## 状態管理
+毎度ながら状態管理にはRecoilを使用します。他の状態管理ライブラリをお使いの方は例によって適宜読み替えてください。
+
+ユーザーが指定した数値を状態に持つ`atom`を作ります。本コンポーネントを複数用いる可能性を考え、`atomFamily`としておきます。
+
+```typescript:state.ts
+export const valueState = atomFamily<number, string>({ key: "valueState", default: 0 });
+```
+
+## Utilの実装
+いくつか便利関数を用意しておきます。
+
+- `parseNumberOrNull`: 文字列を数値に変換しますが、変換に失敗したときは`NaN`ではなく`null`を返します。
+- `withinRange`: 与えられた数値を、`min`以上`max`未満になるよう最も近い値に矯正します。
+
+```typescript:util.ts
+export const parseNumberOrNull = (s: string): number | null => {
+    const num = Number(s);
+    return Number.isNaN(num) ? null : num;
+};
+
+export const withinRange = (x: number, min: number, max: number): number => {
+    return x > max ? max
+        : x < min ? min
+        : x;
+};
+```
+
+## コンポーネントの実装
+<!-- ここにbuttonsとかの説明 -->
+
+```tsx:SliderInput.tsx(抜粋)
+type SliderInputProps = {
+    readonly id: string;
+    readonly defaultValue: number;
+    readonly minValue: number;
+    readonly maxValue: number;
+    readonly step?: number;
+};
+
+const SliderInput = ({ id, defaultValue, minValue, maxValue }: SliderInputProps): JSX.Element => {
+    const [value, setValue] = useRecoilState(valueNoRefState(id));
+    const [valueRaw, setValueRaw] = useState(`${defaultValue}`);
+
+    const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
+        setValueRaw(e.target.value);
+        const tempValue = parseNumberOrNull(e.target.value);
+        if (tempValue != null) {
+            const newValue = withinRange(tempValue, minValue, maxValue);
+            setValue(newValue);
+        }
+    };
+
+    const handleInputBlur = (e: FocusEvent<HTMLInputElement>): void => {
+        const newValue = withinRange(parseNumberOrNull(e.target.value) ?? defaultValue, minValue, maxValue);
+        setValue(newValue);
+        setValueRaw(`${newValue}`);
+    };
+
+    const handleButtonClick = (x: number) => (): void => {
+        setValue(x);
+        setValueRaw(`${x}`);
+    };
+
+    const handleRangeChange = (e: ChangeEvent<HTMLInputElement>): void => {
+        const newValue = parseNumberOrNull(e.target.value) ?? defaultValue;
+        setValue(newValue);
+        setValueRaw(`${newValue}`);
+    };
+
+    return (
+        <div className="flex flex-col">
+            <div className="inline-flex flex-row items-center gap-x-1">
+                <input
+                    type="number"
+                    value={valueRaw}
+                    max={maxValue}
+                    min={minValue}
+                    onChange={handleInputChange}
+                    onBlur={handleInputBlur}
+                    className="input input-bordered input-sm text-right"
+                />
+                <button onClick={handleButtonClick(minValue)} className="btn btn-neutral btn-xs">
+                    min
+                </button>
+                <button onClick={handleButtonClick(defaultValue)} className="btn btn-neutral btn-xs">
+                    def
+                </button>
+                <button onClick={handleButtonClick(maxValue)} className="btn btn-neutral btn-xs">
+                    max
+                </button>
+            </div>
+            <div>
+                <input
+                    type="range"
+                    value={value}
+                    min={minValue}
+                    max={maxValue}
+                    step={step}
+                    onChange={handleRangeChange}
+                />
+            </div>
+        </div>
+    );
+};
+```
