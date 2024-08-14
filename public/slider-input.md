@@ -85,7 +85,7 @@ export const withinRange = (x: number, min: number, max: number): number => {
 ```
 
 ## コンポーネントの実装
-ではコンポーネントを実装していきます。ついでに最小値、デフォルト値、最大値をすぐに選択できるボタンも作っておきます。
+いよいよコンポーネントを実装していきます。ついでに最小値、デフォルト値、最大値をすぐに選択できるボタンも作っておきます。
 
 ```tsx:SliderInput.tsx(抜粋)
 type SliderInputProps = {
