@@ -7,8 +7,5 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "matcher",
-  "license": "ISC",
-  "devDependencies": {
-    "@qiita/qiita-cli": "^1.4.3"
-  }
+  "license": "ISC"
 }
