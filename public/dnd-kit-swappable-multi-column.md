@@ -1,18 +1,5 @@
----
-title: dnd-kitでアイテムもカラムもswappableなマルチカラムを実装してみた
-tags:
-  - React
-  - TypeScript
-  - dnd-kit
-private: false
-updated_at: ''
-id: null
-organization_url_name: null
-slide: false
-ignorePublish: false
----
-# dnd-kitでアイテムもカラムもswappableなマルチカラムを実装してみた
-Reactにてドラッグアンドドロップ（以下DnDと表記します）を実装するライブラリである[dnd-kit](https://dndkit.com/)を用いて、DnDによって
+# dnd kitでアイテムもカラムもswappableなマルチカラムを実装してみた
+Reactにてドラッグアンドドロップ（以下DnDと表記します）を実装するライブラリである[dnd kit](https://dndkit.com/)を用いて、DnDによって
 
 - カラムどうしの入れ替え
 - 同カラム内のアイテムどうしの入れ替え
@@ -25,23 +12,23 @@ Reactにてドラッグアンドドロップ（以下DnDと表記します）を
 <!-- ここに動画 -->
 
 ## 使用パッケージ
-いずれも記事執筆時点での最新です。
+ViteおよびReactのバージョンは`npm create vite@latest`コマンドでインストールされるものを使います。その他は記事執筆時点での最新です。
 |パッケージ|バージョン|
 |---|---|
-|vite|5.3.4|
+|vite|6.0.5|
 |react|18.3.1|
 |recoil|0.7.7|
-|tailwindcss|3.4.7|
+|tailwindcss|3.4.17|
 |clsx|2.1.1|
-|@dnd-kit/core|6.1.0|
+|@dnd-kit/core|6.3.1|
+|@dnd-kit/sortable|10.0.0|
 |@dnd-kit/utilities|3.2.2|
-|@dnd-kit/sortable|8.0.0|
 
-## dnd-kitのインストール
+## dnd kitのインストール
 ルートディレクトリで以下を実行します。今回は要素同士の並び替えを実装したいので、`sortable`パッケージもインストールします。
 
 ```bash
-npm install @dnd-kit/core @dnd-kit/utilities @dnd-kit/sortable
+npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
 ```
 
 （他のパッケージのインストールに関しては本記事の主内容から逸れるため省略させていただきます。）
@@ -165,9 +152,9 @@ const App = (): JSX.Element => {
 これをベースとして、DnD機能を実装していきます。
 
 ## `DndContext`の追加
-dnd-kitでは *Draggable* コンポーネント（ドラッグする要素）と *Droppable* コンポーネント（ドラッグ要素を受け付ける要素）を実装することでDnDを実現しますが、それらの`Context Provider`として親に`DndContext`を置く必要があります。
+dnd kitでは *Draggable* コンポーネント（ドラッグする要素）と *Droppable* コンポーネント（ドラッグ要素を受け付ける要素）を実装することでDnDを実現しますが、それらの *Context Provider* として親に`DndContext`を置く必要があります。
 
-加えて、dnd-kitで提供される機能はあくまでDnDによる見た目の変化を担うものであり、実際のデータの変化などに関してはDnD終了時に呼び出される`DndContext`の`onDragEnd`イベントハンドラに記述する必要があります。が、解説の都合で今は`undefined`にしておきます。
+加えて、dnd kitで提供される機能はあくまでDnDによる見た目の変化を担うものであり、実際のデータの変化などに関してはDnD終了時に呼び出される`DndContext`の`onDragEnd`イベントハンドラに記述する必要があります。が、解説の都合で今は`undefined`にしておきます。
 
 ```diff_tsx:App.tsx(抜粋)
 const App = (): JSX.Element => {
@@ -192,10 +179,10 @@ const App = (): JSX.Element => {
 ```
 
 ## `useSortable`
-dnd-kitにおいては`useDraggable`フックにて *Draggable* コンポーネントを、`useDroppable`フックにて *Droppable* コンポーネントを作成できますが、今回作る入れ替え可能な要素のように *Draggable* かつ *Droppable* なコンポーネントには`useSortable`フックを使います。使い方としては
+dnd kitにおいては`useDraggable`フックにて *Draggable* コンポーネントを、`useDroppable`フックにて *Droppable* コンポーネントを作成できますが、今回作る入れ替え可能な要素のように *Draggable* かつ *Droppable* なコンポーネントには`useSortable`フックを使います。使い方としては
 
 1. `useSortable`フックを使用して必要なプロパティを取得
-1. 1.の一部を用いて`CSS style object`を作成
+1. 1.の一部を用いて *CSS style object* を作成
 1. 1.と2.を返す要素のrootに持たせる
 
 といった具合で、これを`Item`と`Column`に適用させます。
@@ -267,7 +254,7 @@ const SortableItem = ({ labelText }: SortableItemProps): JSX.Element => {
 export default SortableItem;
 ```
 
-*Sortable* なコンポーネントは`SortableContext`の内部に置く必要があるため、`Column`の内側に配置します。`items`には内側に入る各コンポーネントを表す *id*（`useSortable`の引数に指定したものと同じ）の配列[^1]を、`strategy`には`dnd-kit`側に用意されている変数を指定します。DnDによる並び替えを目的とする場合はデフォルトの`rectSortingStrategy`で大丈夫ですが、今回は並び替えではなく入れ替えなので`rectSwappingStrategy`を指定します。
+*Sortable* なコンポーネントは`SortableContext`の内部に置く必要があるため、`Column`の内側に配置します。`items`には内側に入る各コンポーネントを表す *id*（`useSortable`の引数に指定したものと同じ）の配列[^1]を、`strategy`にはdnd kit側に用意されている変数を指定します。DnDによる並び替えを目的とする場合はデフォルトの`rectSortingStrategy`で大丈夫ですが、今回は並び替えではなく入れ替えなので`rectSwappingStrategy`を指定します。
 [^1]: *id* の順序はコンポーネントの順序と揃っている必要があります。なお *id* そのものだけではなく「文字列型または数値型の`id`プロパティを持つオブジェクト」も受け入れるので、コンポーネントに渡すモデルそのものを指定するのも手です。
 
 ```tsx: SortableColumn.tsx
@@ -336,7 +323,7 @@ const App = (): JSX.Element => {
 
 入れ替え操作が行数を食うので、まずはフックに切り出しておきます。
 
-```tsx:useContainerChildren.ts
+```ts:useContainerChildren.ts
 import { useRecoilCallback } from "recoil";
 import { containerChildrenState } from "./containerChildren";
 
@@ -436,10 +423,10 @@ const App = (): JSX.Element => {
 
 <!-- ここに動画 -->
 
-どうやらこの状態では *Sortable* なコンポーネントは直近祖先の`SortableContext`から出られないようです。[^2]
+どうやらこの状態では *Sortable* なコンポーネントは直近先祖の`SortableContext`から出られないようです。[^2]
 [^2]: `SortableContext`を`Container`の直下の1つのみにしてしまえば良いと思いきや、`Column`と`Item`が同じ`SortableContext`に属するため（たとえ`onDragEnd`で入れ替えを禁じていても）`Column`と`Item`を入れ替えようとするアニメーションが発生してしまいます。
 
-そこで`DragOverlay`の出番です。`DragOverlay`はドラッグする要素を別途レンダーするためのコンポーネントで、これを使用することでDnDの際の見た目をカスタマイズすることができます。ただし、デフォルトの挙動の一部がなくなるため注意が必要です。
+そこで`DragOverlay`の出番です。`DragOverlay`はドラッグする要素を別途レンダーするためのコンポーネントで、これを使用することでDnDの際の見た目をカスタマイズすることができます。（ただし、勿論ながら元々の挙動は消えてしまいます。）
 
 まず、どの要素をDnDしているのかを管理したいので`atom`を追加します。
 
@@ -453,7 +440,7 @@ export const activeIdState = atom<string | null>({ key: "activeIdState", default
 
 なお`onDragEnd`で`activeIdState`をリセットするのをお忘れなく。
 
-```diff_tsx:App.ts(抜粋)
+```diff_tsx:App.tsx(抜粋)
 const App = (): JSX.Element => {
     const columns = useRecoilValue(containerChildrenState);
     const { swap } = useContainerChildren();
@@ -507,11 +494,11 @@ const App = (): JSX.Element => {
 流石にこれではみっともないので、`SortableItem`と`SortableColumn`を修正してドラッグ対象となるものは表示しないようにします。
 
 ```diff_tsx:SortableItem.tsx
-+import clsx from "clsx";
-+import { useRecoilValue } from "recoil";
++ import clsx from "clsx";
++ import { useRecoilValue } from "recoil";
 import Item from "./Item";
 import SortableHolder from "../sortableHolder";
-+import { activeIdState } from "../../models/dragTargets";
++ import { activeIdState } from "../../models/dragTargets";
 import { getItemBgColor } from "../../util";
 
 type SortableItemProps = {
@@ -533,13 +520,13 @@ export default SortableItem;
 
 ```diff_tsx:SortableColumn.tsx
 import { rectSwappingStrategy, SortableContext } from "@dnd-kit/sortable";
-+import { clsx } from "clsx";
++ import { clsx } from "clsx";
 import { useRecoilValue } from "recoil";
 import Column from "./Column";
 import SortableHolder from "../sortableHolder";
 import SortableItem from "../item/SortableItem";
 import { columnChildrenSelector } from "../../models/containerChildren";
-+import { activeIdState } from "../../models/dragTargets";
++ import { activeIdState } from "../../models/dragTargets";
 
 type SortableColumnProps = {
     readonly header: string;
@@ -573,15 +560,15 @@ export default SortableColumn;
 まずはどの *Droppable* がターゲットになっているかを状態管理したいので、`atom`を追加します。さらに異`Column`間の`Item`どうしの入れ替えのみを検知するために、`activeId`と`overId`のそれぞれの親`Column`を取得する`selector`を作ります。
 
 ```diff_tsx:dragTargets.ts
--import { atom } from "recoil";
-+import { atom, selector } from "recoil";
-+import { containerChildrenState } from "./containerChildren";
+- import { atom } from "recoil";
++ import { atom, selector } from "recoil";
++ import { containerChildrenState } from "./containerChildren";
 
 export const activeIdState = atom<string | null>({ key: "activeIdState", default: null });
 
-+export const overIdState = atom<string | null>({ key: "overIdState", default: null });
++ export const overIdState = atom<string | null>({ key: "overIdState", default: null });
 
-+export const activeParentIdSelector = selector<string | null>({
++ export const activeParentIdSelector = selector<string | null>({
 +   key: "activeParentIdSelector",
 +   get: ({ get }) => {
 +       const activeId = get(activeIdState);
@@ -589,7 +576,7 @@ export const activeIdState = atom<string | null>({ key: "activeIdState", default
 +   },
 +});
 
-+export const overParentIdSelector = selector<string | null>({
++ export const overParentIdSelector = selector<string | null>({
 +   key: "overParentIdSelector",
 +   get: ({ get }) => {
 +       const overId = get(overIdState);
@@ -662,8 +649,8 @@ import { clsx } from "clsx";
 import { useRecoilValue } from "recoil";
 import Item from "./Item";
 import SortableHolder from "../sortableHolder";
--import { activeIdState } from "../../models/dragTargets";
-+import { activeIdState, activeParentIdSelector, overIdState, overParentIdSelector } from "../../models/dragTargets";
+- import { activeIdState } from "../../models/dragTargets";
++ import { activeIdState, activeParentIdSelector, overIdState, overParentIdSelector } from "../../models/dragTargets";
 import { getItemBgColor } from "../../util";
 
 type SortableItemProps = {
@@ -697,7 +684,7 @@ export default SortableItem;
 ## `onDragCancel`の実装
 これにて完成！…と言いたいところですが、まだ1つ仕事が残っています。
 
-DnDは **Escキーを押すことでキャンセル** できてその際は当然`onDragEnd`が呼び出されないので、このままだと`activeIdState`や`overIdState`がリセットされず見た目が崩壊します。
+DnDは **Escキーを押すことでキャンセル** できますが、その際は当然`onDragEnd`が呼び出されません。よってこのままだと`activeIdState`や`overIdState`がリセットされず、見た目が崩壊します。
 
 `DnDContext`に`onDragcancel`イベントハンドラがあるので、これをちょちょいと実装して解決します。
 
