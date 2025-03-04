@@ -1,63 +1,58 @@
-# Type Challengesを全て打ち負かしたので、解く際に必要になるテクニックと考え方を解説してみる
+# Type Challengesを解くうえで使えるテクニック集
 
 TypeScriptの複雑な型システムをどれほど理解しているのかの腕試しができる[Type Challenges](https://github.com/type-challenges/type-challenges/)
 
 [PartialByKeys](https://github.com/type-challenges/type-challenges/blob/main/questions/02757-medium-partialbykeys/README.md)のような割と実用的なものから、
 [Valid Sudoku](https://github.com/type-challenges/type-challenges/blob/main/questions/35314-hard-valid-sudoku/README.md)のようにこんなのいつ使うんだよ……となるものまで
-様々な問題が収録されているType Challengesですが、この度これを全て打ち負かしてきたので、解く際に必要になるテクニックや考え方をご紹介します。
+様々な問題が収録されているType Challengesですが、これらを解く際に使えるテクニックや考え方をご紹介します。
+
+Type Challengesだけではなく、これってどう書けばよかったっけ…？となった際に辞書的に使えるものになっていますので、ぜひご覧ください。
 
 ## おことわり
-- **一部問題のヒントがあります。**
-- TypeScriptの基本的な型システムに関しての説明はありません。見慣れない用語などは以下の記事などを参照ください。
+- **一部問題（特にeasy）のガッツリ解答が載っています。**
+- TypeScriptの基本的な型システムに関しての説明はありません。用語などは以下の記事などを参照ください。
 
 https://qiita.com/uhyo/items/e2fdef2d3236b9bfe74a
 
 https://qiita.com/uhyo/items/da21e2b3c10c8a03952f
 
-## 三項演算子と再帰呼び出しで全てを制御する
-基本的には型引数`T`に対してMapped TypeやConditional Typeによる分岐（`T extends U ? X : Y`）でゴリゴリ書いていくことになります。
-ループで何かを処理したくても`for`や`while`構文なんて便利なものはありません。諦めて再帰で書きましょう。
+## タプルの各要素を1つずつ処理
 
-### タプルの要素や文字列の文字を1つずつ処理
-タプルに対しては`T extends[infer F, ...infer R]`、文字列に対しては``T extends `${infer F}${infer R}` ``とすることで先頭の要素のみを`F`に、残りを`R`に格納できます。
-（この際`R`は空配列あるいは空文字列になり得ます）
+### 各要素を他の型に変換する場合（Array.prototype.map相当）
+```typescript
+type Foo<T> = T extends [infer F, ...infer R]
+    ? [Bar<F>, ...Foo<R>]  // Rが空でない場合
+    : [];                  // Rが空の場合
 ```
-T extends [infer F, ...infer R]
-    ? // タプルが空ではないときの処理
-    : // タプルが空のときの処理
+- `F`に先頭の要素、`R`に残りの要素が入る
+  - `R`は空タプルになりうる
+- 再帰呼び出しにスプレット演算子をつけることでタプルが階層化するのを防ぐ
 
-T extends `${infer F}${infer R}`
-    ? // 文字列が空ではないときの処理
-    : // 文字列が空のときの処理
+### 何らかの条件を満たす要素を探す場合（Array.prototype.find相当）
+```typescript
+type Foo<T> = T extends [infer F, ...infer R]
+    ? Bar<F> extends true
+        ? F     // Fが条件を満たす場合の返り値
+        : Foo<R>
+    : never;    // 条件を満たす要素が存在しない場合の返り値
 ```
+- 返り値`F`や`never`は目的によって適切なものを選択する
 
-これと再帰呼び出しを組み合わせることで、要素を1つずつ処理することができます。
+### 返す型が単純ではない場合（Array.prototype.reduce相当）
+```typescript
+type Foo<T, A = Initial> = T extends [infer F, ...infer R]
+    ? Foo<R, Bar<A, F>>
+    : A;
 ```
-// タプルの各要素を2つずつ列挙する型
-type Double<T> = T extends [infer F, ...infer R]
-    // タプルの残りRに対してDoubleを再帰的に呼び出し
-    // （スプレッド演算子を使うことでタプルが階層になるのを防ぐ）
-    ? [F, F, ...Double<R>]
-    : [];
+- 型引数を増やすことで途中経過を持たせられるようになる
+  - すべての要素を見終わったらそれを返すだけ
 
-// type Foo = [1, 1, 2, 2, 3, 3];
-type Foo = Double<[1,2,3]>;
+## 文字列を1文字ずつ処理
+```typescript
+type Foo<T> = T extends `${infer F}${infer R}`
+    ? `${Bar<F>}${Foo<R>}`
+    : "";
 ```
-
-途中で`break`したい場合は`F`が条件を満たしたら再帰呼び出しをせずに型を返すようにすればいいでしょう。
-```
-// タプルの中でもっと先頭にある非nullishな要素を返す（ない場合はneverを返す）
-type FirstNonNullish<T> = T extends [infer First, ...infer Rest]
-    ? First extends undefined | null
-        ? FirstNonNullish<Rest>
-        : First
-    : never;
-
-// type Foo = 1;
-type Foo = FirstNonNullish<[null, 1, undefined]>;
-// type Bar = never;
-type Bar = FirstNonNullish<[undefined]>;
-// type Baz = never;
-type Baz = FirstNonNullish<[]>;
-```
+- `F`に先頭の文字、`R`に残りの文字列が入る
+  - `R`は空文字列になりうる
 
