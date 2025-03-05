@@ -1,4 +1,4 @@
-# Type Challengesを解くうえで使えるテクニック集
+# Type Challengesを解く際に使えるテクニック集
 
 TypeScriptの複雑な型システムをどれほど理解しているのかの腕試しができる[Type Challenges](https://github.com/type-challenges/type-challenges/)
 
@@ -9,24 +9,31 @@ TypeScriptの複雑な型システムをどれほど理解しているのかの�
 Type Challengesだけではなく、これってどう書けばよかったっけ…？となった際に辞書的に使えるものになっていますので、ぜひご覧ください。
 
 ## おことわり
-- **一部問題（特にeasy）のガッツリ解答が載っています。**
-- TypeScriptの基本的な型システムに関しての説明はありません。用語などは以下の記事などを参照ください。
+- **一部問題（特にeasy）の解答がガッツリ載っています。**
+- TypeScriptの型システムに関しての基本的な説明はありません。不明な点は以下のuhyoさんの記事を参照ください。
 
 https://qiita.com/uhyo/items/e2fdef2d3236b9bfe74a
 
 https://qiita.com/uhyo/items/da21e2b3c10c8a03952f
 
-## タプルの各要素を1つずつ処理
+## タプルの各要素を1つずつ処理する
 
 ### 各要素を他の型に変換する場合（Array.prototype.map相当）
+再帰呼び出しを用います。
 ```typescript
 type Foo<T> = T extends [infer F, ...infer R]
     ? [Bar<F>, ...Foo<R>]  // Rが空でない場合
     : [];                  // Rが空の場合
 ```
-- `F`に先頭の要素、`R`に残りの要素が入る
-  - `R`は空タプルになりうる
-- 再帰呼び出しにスプレット演算子をつけることでタプルが階層化するのを防ぐ
+`F`に先頭の要素、`R`に残りの要素（空になりうる）が入ります。再帰呼び出しにスプレット演算子をつけることでタプルが階層化するのを防ぎます。
+
+なお再帰呼び出しの部分が複雑になる場合は、以下のように型引数を増やして途中経過を持たせるようにすると再帰呼び出しの制限`"Type instantiation is excessively deep and possibly infinite"`にかかりにくくなります。
+```typescript
+type Foo<T, A extends unknown[] = []> = T extends [infer F, ...infer R]
+    ? Foo<R, [...A, Bar<F>]>
+    : A;
+```
+この`A`を持たせるというのはType Challengesでは頻出のテクニックですが、ユーティリティ型として公開する場合には`A`に変なものを入れられる可能性があるためラップしたほうが無難です。
 
 ### 何らかの条件を満たす要素を探す場合（Array.prototype.find相当）
 ```typescript
@@ -36,7 +43,7 @@ type Foo<T> = T extends [infer F, ...infer R]
         : Foo<R>
     : never;    // 条件を満たす要素が存在しない場合の返り値
 ```
-- 返り値`F`や`never`は目的によって適切なものを選択する
+返り値`F`や`never`は目的によって適切なものを選択してください。
 
 ### 返す型が単純ではない場合（Array.prototype.reduce相当）
 ```typescript
@@ -44,15 +51,133 @@ type Foo<T, A = Initial> = T extends [infer F, ...infer R]
     ? Foo<R, Bar<A, F>>
     : A;
 ```
-- 型引数を増やすことで途中経過を持たせられるようになる
-  - すべての要素を見終わったらそれを返すだけ
+Array.prototype.map相当の後半で紹介したものを少しいじっただけです。`Bar<A, F>`の部分がArray.prototype.reduceにおけるコールバック関数に相当します。
 
-## 文字列を1文字ずつ処理
+## 文字列を1文字ずつ処理する
 ```typescript
 type Foo<T> = T extends `${infer F}${infer R}`
     ? `${Bar<F>}${Foo<R>}`
     : "";
 ```
-- `F`に先頭の文字、`R`に残りの文字列が入る
-  - `R`は空文字列になりうる
+`F`に先頭の文字、`R`に残りの文字列（空になりうる）が入ります。
 
+## オブジェクトの交差型を1つのオブジェクトにまとめる
+以下の2つの型は実質的に同じで相互に代入可能であるにもかかわらず、Type Challengesの正誤判定に用いられる`Equal<X, Y>`では別物とみなされてしまいます。    
+それだけではなく、`Foo`はVS Codeのインテリセンスにおける表示も非常に見づらいという難点があります。
+```typescript
+type Foo = { x: string; } & { y: number; };
+type Bar = {
+    x: string;
+    y: number;
+};
+```
+この`Foo`を`Bar`のように展開するには、単にMapped Typesに通せばOKです。optionalやreadonlyなプロパティも問題なく処理できます。
+```typescript
+type FlattenObject<T> = {
+    [P in keyof T]: T[P];
+};
+
+// type Baz = {
+//     x: string;
+//     y: number;
+// }
+type Baz = FlattenObject<Foo>;
+```
+
+## ユニオン型に含まれる要素を1つずつ処理する
+```typescript
+type Foo<T> = T extends T
+    ? Bar<T>
+    : never;  // T == neverのとき
+```
+`T extends T`でUnion Distributionを発生させることで1つずつ見ていくことが可能になります。[^t-ext-t]
+
+[^t-ext-t]: もちろん`T extends unknown`でも構いませんが、`T extends T`と書くことで意図的にUnion Distributionを生じさせていることがわかりやすくなると思います。
+
+わざわざ`T extends T`としなくても`Bar<T>`の部分でUnion Distribution自体は発生しますが、`Bar<T>`の内部で`T`が2回以上使われた場合にユニオン内の全ての組み合わせを網羅するため、1つずつ処理したい場合は`T extends T`で先にUnion Distributionを起こしておくのが無難です。（逆に言えば、`Bar<T>`の内部で`T`が1度しか使われない場合は`T extends T`は不要です。）
+```typescript
+// 与えられた文字列を2度繰り返す
+type LooseRepeat<T extends string> = `${T}${T}`;
+type StrictRepeat<T extends string> = T extends T
+    ? `${T}${T}`
+    : never;
+
+// type LooseResult = "foofoo" | "barbar" | "foobar" | "barfoo"
+type LooseResult = LooseRepeat<"foo" | "bar">;
+// type StrictResult = "foofoo" | "barbar"
+type StrictResult = StrictRepeat<"foo" | "bar">;
+```
+
+## 文字列を数値に変換する
+Template Literal Types内で`infer N extends number`とすることで数値型への変換が可能です。
+```typescript
+type Parse<S extends string> = S extends `${infer N extends number}`
+    ? N
+    : never;
+
+type Foo = Parse<"42">;       // type Foo = 42
+type Bar = Parse<"-3.14">;    // type Bar = -3.14
+type Baz = Parse<"0xFF">;     // type Baz = number
+type Qux = Parse<"2.5e2">;    // type Qux = number
+type Quux = Parse<"0123">;    // type Quux = number
+type Corge = Parse<"0.10">;   // type Corge = number
+type Grault = Parse<"42n">;   // type Grault = never
+type Garply = Parse<"0o91">;  // type Garply = never （※8進数に使えない数字がある）
+type Waldo = Parse<"NaN">;    // type Waldo = never
+```
+ただし、数値リテラルに変換する場合は「10進表記」かつ「浮動小数点表記ではない」かつ「余分なゼロが存在しない」ような文字列を与える必要があります。  
+上記を満たさないものの数値として解釈可能な文字列が与えられた場合は単に`number`型が返ります。
+
+
+## 2つのタプルの長さを比較する
+`T extends [infer F, ...infer R]`を両方のタプルに対して行うことでその長さの比較ができます。
+```typescript
+// Xの長さがYの長さよりも大きければtrue、そうでなければfalseを返す
+type LongerThan<X extends unknown[], Y extends unknown[]>
+    = X extends [infer XF, ...infer XR]
+        ? Y extends [infer YF, ...infer YR]
+            // XもYも空ではない
+            ? LongerThan<XR, YR>
+            // Xは空ではないがYは空である
+            : true
+        // Xが空である
+        : false;
+
+type Foo = LongerThan<[1, 2, 3], ["foo", "bar"]>;  // type Foo = true
+type Bar = LongerThan<[], [1]>;                    // type Bar = false
+type Baz = LongerThan<["baz"], [true]>;            // type Baz = false
+```
+上記例の`false`を返すところで再び`Y extends [infer YF, ...infer YR]`を行えば、「長いか、そうでないか」の2値ではなく「長いか、同じか、短いか」の3値を返すことができます。
+
+
+## 非負整数Nを長さNのタプルに変換する
+これ自体は大して意味がありませんが、変換することによって大小比較や加算などができるようになります。[^n-to-t]
+
+[^n-to-t]: それも大して意味があるわけではないという指摘は聞こえません
+```typescript
+type NumberToTuple<N extends number, A extends unknown[] = []> = A["length"] extends N
+    ? A
+    : NumberToTuple<N, [...A, unknown]>;
+
+// LongerThan<X, Y>は「2つのタプルの長さを比較する」のものと同一
+type GreaterThan<X extends number, Y extends number> = LongerThan<NumberToTuple<X>, NumberToTuple<Y>>;
+
+type Foo = GreaterThan<5, 3>;     // type Foo = true
+type Bar = GreaterThan<2, 2>;     // type Bar = false
+type Baz = GreaterThan<-1, 0>;    // Error: Type instantiation is excessively deep and possibly infinite.
+type Qux = GreaterThan<1000, 0>;  // Error: Type instantiation is excessively deep and possibly infinite.
+
+type Add<X extends number, Y extends number> = [...ToTuple<X>, ...ToTuple<Y>]["length"];
+
+type Quux = Add<3, 5>;  // type Quux = 8
+```
+タプルの長さのみが重要なので`A`の中身に関しては何でも構いません。`unknown, 0, 1`あたりが用いられることが多いようです。
+
+なお $N < 0$ の場合`A["length"] extends N`が`true`になることはないため、再帰呼び出しが止まらず回数制限を迎えます。  
+$N \geq 1000$ だとそもそも素で再帰呼び出しの回数制限に引っかかります。
+
+## Mapped Typeのプロパティ名を変換したい
+// NOT IMPLEMENTED
+
+## Mapped Typeで一部プロパティを除外したい
+// NOT IMPLEMENTED
