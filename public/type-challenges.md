@@ -20,6 +20,38 @@ https://qiita.com/uhyo/items/da21e2b3c10c8a03952f
 
 ## タプル関連
 
+### タプルの各要素から成るユニオン型を取得する
+`T[number]`で数値でアクセスできる型、すなわちTの全要素をユニオン型で取得できます。
+```typescript
+type TupleToUnion<T extends unknown[]> = T[number];
+
+// type Foo = true | 1 | "foo"
+type Foo = TupleToUnion<[1, "foo", true, 1]>;
+```
+
+Type Challengesとは関係ない話ですが、他言語における`enum`相当のものを文字列リテラルのユニオン型で定義する場合には、ユニオン型を直接宣言するよりも、タプルを宣言してそこからユニオン型を作ったほうが何かと便利です。
+```typescript
+// as constをつけないとstring[]に推論されてしまう
+const eevees = ["イーブイ", "シャワーズ", "サンダース", "ブースター"] as const;
+// type Eevee = "イーブイ" | "シャワーズ" | "サンダース" | "ブースター"
+type Eevee = (typeof eevees)[number];
+
+// 与えられた文字列がEevee型かどうかを判断する型ガード関数
+const isEevee = (s: string): s is Eevee => {
+    return eevees.includes(s as Eevee);
+    // 嘘のasが気持ち悪い場合は↓で
+    // return eevees.find(eevee => eevee === s) != null;
+};
+
+console.log(isEevee("イーブイ"));    // true
+console.log(isEevee("リザードン"));  // false
+```
+値の列挙も型ガードの実装も簡単にできます。さらに、追加の際もタプルを書き換えるだけなのもポイントです。
+```diff_typescript
+- const eevees = ["イーブイ", "シャワーズ", "サンダース", "ブースター"] as const;
++ const eevees = ["イーブイ", "シャワーズ", "サンダース", "ブースター", "エーフィ", "ブラッキー", "リーフィア", "グレイシア", "ニンフィア"] as const;
+```
+
 ### タプルの各要素を変換する（Array.prototype.map相当）
 再帰呼び出しを用います。
 ```typescript
@@ -35,7 +67,7 @@ type Foo<T, A extends unknown[] = []> = T extends [infer F, ...infer R]
     ? Foo<R, [...A, Bar<F>]>
     : A;
 ```
-この`A`を持たせるというのはType Challengesでは頻出のテクニックですが、ユーティリティ型として公開する場合には`A`に変なものを入れられる可能性があるためラップしたほうが無難です。
+なお、この`A`を持たせるというのはType Challengesでは頻出のテクニックですが、ユーティリティ型として公開する場合には`A`に変なものを入れられる可能性があるためラップしたほうが無難です。
 
 ### タプル内で何らかの条件を満たす要素を探す（Array.prototype.find相当）
 ```typescript
@@ -45,7 +77,7 @@ type Foo<T> = T extends [infer F, ...infer R]
         : Foo<R>
     : never;    // 条件を満たす要素が存在しない場合の返り値
 ```
-返り値`F`や`never`は目的によって適切なものを選択してください。
+`Bar<T>`が`Array.prototype.find`におけるコールバック関数に相当します。返り値`F`や`never`は目的によって適切なものを選択してください。
 
 ### タプルの各要素を処理して複雑な型を返す（Array.prototype.reduce相当）
 ```typescript
