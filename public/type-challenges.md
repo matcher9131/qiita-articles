@@ -77,7 +77,7 @@ type Foo<T> = T extends [infer F, ...infer R]
         : Foo<R>
     : never;    // 条件を満たす要素が存在しない場合の返り値
 ```
-`Bar<T>`が`Array.prototype.find`におけるコールバック関数に相当します。返り値`F`や`never`は目的によって適切なものを選択してください。
+`Bar<F>`が`Array.prototype.find`におけるコールバック関数に相当します。返り値`F`や`never`は目的によって適切なものを選択してください。
 
 ### タプルの各要素を処理して複雑な型を返す（Array.prototype.reduce相当）
 ```typescript
@@ -87,7 +87,20 @@ type Foo<T, A = Initial> = T extends [infer F, ...infer R]
 ```
 Array.prototype.map相当の後半で紹介したものを少しいじっただけです。`Bar<A, F>`の部分がArray.prototype.reduceにおけるコールバック関数に相当します。
 
-## 2つのタプルの長さを比較する
+### タプルの各要素で条件を満たすものの個数を調べる（C++のstd::countやstd::count_if相当）
+数値を直接カウントアップする術はないので、タプルの長さを用います。
+```typescript
+type Count<T, A extends unknown[] = []> = T extends [infer F, ...infer R]
+    ? Bar<F> extends true
+        ? Count<R, [...A, unknown]>
+        : Count<R, A>
+    : A["length"];
+```
+例によって`Bar<F>`はコールバック関数です。
+
+タプルの長さのみが重要なので`A`の中身に関しては何でも構いません。`unknown, 0, 1`あたりが用いられることが多いようです。
+
+### 2つのタプルの長さを比較する
 `T extends [infer F, ...infer R]`を両方のタプルに対して行うことでその長さの比較ができます。
 ```typescript
 // Xの長さがYの長さよりも大きければtrue、そうでなければfalseを返す
@@ -107,8 +120,8 @@ type Baz = LongerThan<["baz"], [true]>;            // type Baz = false
 ```
 上記例の`false`を返すところで再び`Y extends [infer YF, ...infer YR]`を行えば、「長いか、そうでないか」の2値ではなく「長いか、同じか、短いか」の3値を返すことができます。
 
-## 非負整数Nを長さNのタプルに変換する
-これ自体は大して意味がありませんが、変換することによって大小比較や加算などができるようになります。[^n-to-t]
+### 非負整数Nを長さNのタプルに変換する
+これ自体は大して意味がありませんが、変換することによって大小比較や加算などができるようになります。[^n-to-t] 基本的にはやることは「タプルの各要素で条件を満たすものの個数を調べる」と同じです。
 
 [^n-to-t]: それも大して意味があるわけではないという指摘は聞こえません
 ```typescript
@@ -128,11 +141,10 @@ type Add<X extends number, Y extends number> = [...ToTuple<X>, ...ToTuple<Y>]["l
 
 type Quux = Add<3, 5>;  // type Quux = 8
 ```
-タプルの長さのみが重要なので`A`の中身に関しては何でも構いません。`unknown, 0, 1`あたりが用いられることが多いようです。
-
 なお $N < 0$ の場合`A["length"] extends N`が`true`になることはないため、再帰呼び出しが止まらず回数制限を迎えます。  
-$N \geq 1000$ だとそもそも素で再帰呼び出しの回数制限に引っかかります。
+$N \geq 1000$ だとそもそも素で再帰呼び出しの回数制限に引っかかります。[^n-to-t-2]
 
+[^n-to-t-2]: 2の累乗の長さのタプルをあらかじめ用意しておくなどでもっと大きな非負整数を扱えるようになりますが、そこまでくると数値をタプルに変換するよりも、タプルに頼らず数値の各桁を処理したほうが楽なことが多いです。
 
 ## 文字列関連
 
