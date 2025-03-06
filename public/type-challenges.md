@@ -125,9 +125,8 @@ type Grault = Parse<"42n">;   // type Grault = never
 type Garply = Parse<"0o91">;  // type Garply = never （※8進数に使えない数字がある）
 type Waldo = Parse<"NaN">;    // type Waldo = never
 ```
-ただし、数値リテラルに変換する場合は「10進表記」かつ「浮動小数点表記ではない」かつ「余分なゼロが存在しない」ような文字列を与える必要があります。  
+ただし、数値リテラル型に変換する場合は「10進表記」かつ「浮動小数点表記ではない」かつ「余分なゼロが存在しない」ような文字列を与える必要があります。  
 上記を満たさないものの数値として解釈可能な文字列が与えられた場合は単に`number`型が返ります。
-
 
 ## 2つのタプルの長さを比較する
 `T extends [infer F, ...infer R]`を両方のタプルに対して行うことでその長さの比較ができます。
@@ -148,7 +147,6 @@ type Bar = LongerThan<[], [1]>;                    // type Bar = false
 type Baz = LongerThan<["baz"], [true]>;            // type Baz = false
 ```
 上記例の`false`を返すところで再び`Y extends [infer YF, ...infer YR]`を行えば、「長いか、そうでないか」の2値ではなく「長いか、同じか、短いか」の3値を返すことができます。
-
 
 ## 非負整数Nを長さNのタプルに変換する
 これ自体は大して意味がありませんが、変換することによって大小比較や加算などができるようになります。[^n-to-t]
@@ -176,8 +174,67 @@ type Quux = Add<3, 5>;  // type Quux = 8
 なお $N < 0$ の場合`A["length"] extends N`が`true`になることはないため、再帰呼び出しが止まらず回数制限を迎えます。  
 $N \geq 1000$ だとそもそも素で再帰呼び出しの回数制限に引っかかります。
 
-## Mapped Typeのプロパティ名を変換したい
-// NOT IMPLEMENTED
+## Mapped Typeのプロパティ名を変換する
+Mapped Typeの`[]`内で`as`を用いることでプロパティ名を操れます。
+```typescript
+// Tが文字列型あるいは数値型ならUを先頭にくっつけた文字列型を返す
+type Prepend<T, U extends string> = T extends string | number
+    ? `${U}${T}`
+    : T;
 
-## Mapped Typeで一部プロパティを除外したい
-// NOT IMPLEMENTED
+// オブジェクトの各プロパティ名にprefixをつける
+type WithPrefix<T, Prefix extends string> = {
+    [K in keyof T as Prepend<K, Prefix>]: T[K];
+};
+
+// type Foo = {
+//     bazfoo: string;
+//     baz0: number;
+// }
+type Foo = WithPrefix<{ foo: string; 0: number; }, "baz">;
+```
+このケースにおける`as`は型アサーションとは異なり、任意の型に好き勝手に変換できます。どちらかといえばプロパティ名に対するmapをたまたま同じキーワードの`as`が担っていると考えたほうがいいかもしれません。
+
+なお、`as`以降で`extends`を使うことで条件で分岐させることができます。（後述）
+
+## Mapped Typeで一部プロパティを除外する
+Mapped Typeのプロパティ名を`never`にすると、そのプロパティはオブジェクトから削除されます。
+```typescript
+// オブジェクトからプロパティ名がアンダースコアで始まるものを削除する
+type RemovePrivate<T> = {
+    [K in keyof T as K extends `_${string}`
+        ? never
+        : K
+    ]: T[K];
+};
+
+// type Foo = { foo: string; }
+type Foo = RemovePrivate<{ foo: string; _bar: number; }>;
+```
+
+注意点として、プロパティ名ではなく値をneverにしてもオブジェクトからは削除されません。値によって条件分岐させる場合でもあくまでプロパティ名側で`extends`させる必要があります。
+```typescript
+// オブジェクトから値が数値型のプロパティを削除する
+
+// 値をneverにしてしまっている（間違い）
+type WrongRemoveNumberProperty<T> = {
+    [K in keyof T]: T[K] extends number
+        ? never
+        : T[K];
+};
+// プロパティ名をneverにしている（正しい）
+type RemoveNumberProperty<T> = {
+    [K in keyof T as T[K] extends number
+        ? never
+        : K
+    ]: T[K];
+};
+
+// type Foo = {
+//     foo: string;
+//     bar: never;
+// }
+type Foo = WrongRemoveNumberProperty<{ foo: string, bar: 0 | 1 | 2 }>;
+// type Bar = { foo: string; }
+type Bar = RemoveNumberProperty<{ foo: string, bar: 0 | 1 | 2 }>
+```
