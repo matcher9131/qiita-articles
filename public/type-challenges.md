@@ -10,7 +10,7 @@ Type Challengesだけではなく、これってどう書けばよかったっ�
 
 
 ## おことわり
-- **一部問題（特にeasy）の解答がガッツリ載っています。**
+- **一部問題（特にeasy, medium）の解答がガッツリ載っています。**
 - TypeScriptの型システムに関しての基本的な説明はありません。不明な点は以下のuhyoさんの記事を参照ください。
 
 https://qiita.com/uhyo/items/e2fdef2d3236b9bfe74a
@@ -71,7 +71,7 @@ type Foo<T> = T extends [infer F, ...infer R]
 ```
 再帰呼び出しの際にスプレッド演算子を用いてタプルが階層化するのを防ぎます。
 
-再帰呼び出しの制限`"Type instantiation is excessively deep and possibly infinite"`に引っかかる場合は以下がおすすめです。（詳細は後述）
+再帰呼び出しの制限`"Type instantiation is excessively deep and possibly infinite."`に引っかかる場合は以下がおすすめです。（詳細は後述）
 ```typescript
 type Foo<T, A extends unknown[] = []> = T extends [infer F, ...infer R]
     ? Bar<T> extends true
@@ -332,7 +332,31 @@ type LooseResult = LooseRepeat<"foo" | "bar">;
 type StrictResult = StrictRepeat<"foo" | "bar">;
 ```
 
+## 再帰呼び出し回数制限にかかりにくくする
+Conditional Typesで再帰呼び出しを行う際、その型単独で書くと末尾再帰の最適化によって再帰呼び出しの回数制限`"Type instantiation is excessively deep and possibly infinite."`にかかりにくくなります。
 
+具体的には以下の通りです。
+```typescript
+type IsUpperCase<S extends string> = // 省略
+
+type Foo1<S extends string> = S extends `${infer F}${infer R}`
+    ? IsUpperCase<F> extends true
+        ? `${F}${Foo1<R>}`  // Foo1を単独で呼び出していないため末尾再帰の最適化の対象外
+        : Foo1<R>
+    : "";
+
+type Foo2<S, A extends string = ""> = S extends `${infer F}${infer R}`
+    ? IsUpperCase<F> extends true
+        ? Foo2<R, `${A}${F}`>  // `${A}${F}`をFoo2の内部に閉じ込めることでFoo2を単独で呼び出しているため、末尾再帰の最適化の対象になる
+        : Foo2<R, A>
+    : A;
+
+// Error: Type instantiation is excessively deep and possibly infinite.
+// type X1 = `ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVW${any}`
+type X1 = Foo1<"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ">;
+// type X2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ"
+type X2 = Foo2<"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ">;
+```
 
 
 
