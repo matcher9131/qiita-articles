@@ -52,22 +52,59 @@ console.log(isEevee("リザードン"));  // false
 + const eevees = ["イーブイ", "シャワーズ", "サンダース", "ブースター", "エーフィ", "ブラッキー", "リーフィア", "グレイシア", "ニンフィア"] as const;
 ```
 
-### タプルの各要素を変換する（Array.prototype.map相当）
+### タプルの各要素を1つずつ処理する（Array.prototype.forEach相当）
 再帰呼び出しを用います。
 ```typescript
 type Foo<T> = T extends [infer F, ...infer R]
-    ? [Bar<F>, ...Foo<R>]  // Rが空でない場合
-    : [];                  // Rが空の場合
+    ? // Tが空でないとき
+    : // Tが空のとき
 ```
-`F`に先頭の要素、`R`に残りの要素（空になりうる）が入ります。再帰呼び出しにスプレット演算子をつけることでタプルが階層化するのを防ぎます。
+`F`に先頭の要素、`R`に残りの要素（空になりうる）が入ります。後述のArray.prototype.map相当を除き、基本的にタプルの各要素を舐める際にはこのアプローチを用います。
 
-なお再帰呼び出しの部分が複雑になる場合は、以下のように型引数を増やして途中経過を持たせるようにすると再帰呼び出しの制限`"Type instantiation is excessively deep and possibly infinite"`にかかりにくくなります。
+### タプルから条件を満たす要素のみのタプルを作る（Array.prototype.filter相当）
+```typescript
+type Foo<T> = T extends [infer F, ...infer R]
+    ? Bar<T> extends true
+        ? [T, ...Foo<R>]
+        : Foo<R>
+    : [];
+```
+再帰呼び出しの際にスプレッド演算子を用いてタプルが階層化するのを防ぎます。
+
+再帰呼び出しの制限`"Type instantiation is excessively deep and possibly infinite"`に引っかかる場合は以下がおすすめです。（詳細は後述）
 ```typescript
 type Foo<T, A extends unknown[] = []> = T extends [infer F, ...infer R]
-    ? Foo<R, [...A, Bar<F>]>
-    : A;
+    ? Bar<T> extends true
+        ? Foo<R, [...A, T]>
+        : Foo<R, A>
+    : [];
 ```
-なお、この`A`を持たせるというのはType Challengesでは頻出のテクニックですが、ユーティリティ型として公開する場合には`A`に変なものを入れられる可能性があるためラップしたほうが無難です。
+
+### タプルの各要素を変換する（Array.prototype.map相当）
+単純な場合はMapped Typesを用いるのが簡便です。
+```typescript
+type Foo<T> = {
+    [K in keyof T]: Bar<T[K]>;
+};
+```
+`Bar<X>`が`Array.prototype.map`におけるコールバック関数に相当します。
+
+具体的には、`T`が長さ3のタプルのとき以下のようなイメージで展開されます。（※あくまでイメージであって正確ではありません）
+```typescript
+K = 0 | 1 | 2;
+Foo<T> = {
+    0: Bar<T[0]>;
+    1: Bar<T[1]>;
+    2: Bar<T[2]>;
+}
+```
+
+勿論`T extends [infer F, ...infer R]`でも処理できます。
+```typescript
+type Foo<T> = T extends [infer F, ...infer R]
+    ? [Bar<F>, ...Foo<R>]
+    : [];
+```
 
 ### タプル内で何らかの条件を満たす要素を探す（Array.prototype.find相当）
 ```typescript
@@ -77,7 +114,7 @@ type Foo<T> = T extends [infer F, ...infer R]
         : Foo<R>
     : never;    // 条件を満たす要素が存在しない場合の返り値
 ```
-`Bar<F>`が`Array.prototype.find`におけるコールバック関数に相当します。返り値`F`や`never`は目的によって適切なものを選択してください。
+`Bar<X>`が`Array.prototype.find`におけるコールバック関数に相当します。返り値`F`や`never`は目的によって適切なものを選択してください。
 
 ### タプルの各要素を処理して複雑な型を返す（Array.prototype.reduce相当）
 ```typescript
@@ -85,7 +122,7 @@ type Foo<T, A = Initial> = T extends [infer F, ...infer R]
     ? Foo<R, Bar<A, F>>
     : A;
 ```
-Array.prototype.map相当の後半で紹介したものを少しいじっただけです。`Bar<A, F>`の部分がArray.prototype.reduceにおけるコールバック関数に相当します。
+型引数に途中経過`A`を持たせることで`Array.prototype.reduce`のような操作ができます。`Bar<A, F>`の部分がコールバック関数に相当します。
 
 ### タプルの各要素で条件を満たすものの個数を調べる（C++のstd::countやstd::count_if相当）
 数値を直接カウントアップする術はないので、タプルの長さを用います。
@@ -96,9 +133,10 @@ type Count<T, A extends unknown[] = []> = T extends [infer F, ...infer R]
         : Count<R, A>
     : A["length"];
 ```
-例によって`Bar<F>`はコールバック関数です。
+例によって`Bar<F>`はコールバック関数に相当します。
 
 タプルの長さのみが重要なので`A`の中身に関しては何でも構いません。`unknown, 0, 1`あたりが用いられることが多いようです。
+（何でも構わないので`F`をそのまま突っ込んでも勿論OKですが、`Array.prototype.filter`相当と紛らわしいため避けたほうが良いでしょう。）
 
 ### 2つのタプルの長さを比較する
 `T extends [infer F, ...infer R]`を両方のタプルに対して行うことでその長さの比較ができます。
