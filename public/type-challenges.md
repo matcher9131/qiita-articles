@@ -318,7 +318,7 @@ type Foo<T> = T extends T
 
 [^t-ext-t]: もちろん`T extends unknown`でも構いませんが、`T extends T`と書くことで意図的にUnion Distributionを生じさせていることがわかりやすくなると思います。
 
-わざわざ`T extends T`としなくても`Bar<T>`の部分でUnion Distribution自体は発生しますが、`Bar<T>`の内部で`T`が2回以上使われた場合にユニオン内の全ての組み合わせを網羅するため、1つずつ処理したい場合は`T extends T`で先にUnion Distributionを起こしておくのが無難です。（逆に言えば、`Bar<T>`の内部で`T`が1度しか使われない場合は`T extends T`は不要です。）
+わざわざ`T extends T`としなくてもUnion Distribution自体は`Bar<T>`の内部で発生する可能性がありますが、それが意図するものかどうかはわかりません。以下の例では`LooseRepeat<T>`内で`T`がそのままの形で2回使われたためにUnion Distributionによって全ての組み合わせを網羅してしまっています。`T extends T`で先にUnion Distributionを起こせば`` `${T}${T}` ``の部分には分配された後の型が入って意図したものになります。
 ```typescript
 // 与えられた文字列を2度繰り返す
 type LooseRepeat<T extends string> = `${T}${T}`;
@@ -360,3 +360,8 @@ type X2 = Foo2<"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ">;
 
 
 
+// 引数をまとめて受ける
+// 引数をタプルで受ける(value: [...T])
+// Conditional typesはneverが返ることがある
+// Utility types
+// - 英大文字、英小文字の検出
