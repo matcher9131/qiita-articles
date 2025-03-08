@@ -358,10 +358,30 @@ type X1 = Foo1<"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ">;
 type X2 = Foo2<"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ">;
 ```
 
+## Conditional Typesで意図しない分岐をしてしまうのを対策する
+もちろん場合によりけりですが、間違ってなさそうなのに正解できない場合はConditional Typesに`never`型が紛れ込んでいるケースが多々あります。
 
+Conditional Typesには`T extends U ? X : Y`の`T`が`never`型のとき`X`でも`Y`でもなく`never`型が返るという仕様があります。  
+Union Distributionで分配するものがなくなった結果`never`型になるという扱いのようです。
+```typescript
+// number型に制限された型引数にneverを代入できるので
+// 一見すると'never extends number'はtrueになりそうだが……
+type Foo<T extends number = never> = // 省略
+
+type Bar<T, U> = T extends U ? 1 : 0;
+// 実際にはXは1でも0でもなくneverになる
+// type X = never
+type X = Bar<never, number>;
+```
+
+これを回避するにはUnion Distributionを起こさなければOKです。
+```typescript
+type Baz<T, U> = [T] extends [U] ? 1 : 0;
+// type Y = 1
+type Y = Baz<never, number>;
+```
 
 // 引数をまとめて受ける
 // 引数をタプルで受ける(value: [...T])
-// Conditional typesはneverが返ることがある
 // Utility types
 // - 英大文字、英小文字の検出
