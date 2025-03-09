@@ -77,7 +77,7 @@ type Foo<T, A extends unknown[] = []> = T extends [infer F, ...infer R]
     ? Bar<T> extends true
         ? Foo<R, [...A, T]>
         : Foo<R, A>
-    : [];
+    : A;
 ```
 
 ### タプルの各要素を変換する（Array.prototype.map相当）
@@ -179,10 +179,23 @@ type Add<X extends number, Y extends number> = [...ToTuple<X>, ...ToTuple<Y>]["l
 
 type Quux = Add<3, 5>;  // type Quux = 8
 ```
-なお $N < 0$ の場合`A["length"] extends N`が`true`になることはないため、再帰呼び出しが止まらず回数制限を迎えます。  
+なお $N < 0$ の場合`A["length"] extends N`が`true`になることはないため、再帰呼び出しが止まらず回数制限を迎えます。
+
 $N \geq 1000$ だとそもそも素で再帰呼び出しの回数制限に引っかかります。[^n-to-t-2]
 
 [^n-to-t-2]: 2の累乗の長さのタプルをあらかじめ用意しておくなどでもっと大きな非負整数を扱えるようになりますが、そこまでくると数値をタプルに変換するよりも、タプルに頼らず数値の各桁を処理したほうが楽なことが多いです。
+
+### 配列リテラルを配列ではなくタプルとして推論させる
+関数Genericsで引数を推論させる場合などで、配列リテラルを配列としてではなくタプルとして解釈して欲しいときは`[...T]`とします。
+```typescript
+declare function f<T extends unknown[]>(value: T): T;
+declare function g<T extends unknown[]>(value: [...T]): T;
+
+// const foo: (string | number)[]
+const foo = f([1, 2, "foo"]);
+// const baz: [number, number, string]
+const baz = g([1, 2, "foo"]);
+```
 
 ## 文字列関連
 
@@ -218,7 +231,7 @@ type Waldo = Parse<"NaN">;    // type Waldo = never
 ## オブジェクト関連
 
 ### オブジェクトの交差型を1つのオブジェクトにまとめる
-以下の2つの型は実質的に同じで相互に代入可能であるにもかかわらず、Type Challengesの正誤判定に用いられる`Equal<X, Y>`では別物とみなされてしまいます。    
+以下の2つの型は実質的に同じで相互に代入可能であるにもかかわらず、Type Challengesの正誤判定に用いられる`Equal<X, Y>`では別物とみなされてしまいます。
 それだけではなく、`Foo`はVS Codeのインテリセンスにおける表示も非常に見づらいという難点があります。
 ```typescript
 type Foo = { x: string; } & { y: number; };
@@ -259,7 +272,8 @@ type WithPrefix<T, Prefix extends string> = {
 // }
 type Foo = WithPrefix<{ foo: string; 0: number; }, "baz">;
 ```
-このケースにおける`as`は型アサーションとは異なり、任意の型に好き勝手に変換できます。どちらかといえばプロパティ名に対するmapをたまたま同じキーワードの`as`が担っていると考えたほうがいいかもしれません。
+このケースにおける`as`は型アサーションとは異なり、任意の型に好き勝手に変換できます。
+どちらかといえばプロパティ名に対するmapをたまたま同じキーワードの`as`が担っていると考えたほうがいいかもしれません。
 
 なお、`as`以降で`extends`を使うことで条件で分岐させることができます。（後述）
 
@@ -318,7 +332,9 @@ type Foo<T> = T extends T
 
 [^t-ext-t]: もちろん`T extends unknown`でも構いませんが、`T extends T`と書くことで意図的にUnion Distributionを生じさせていることがわかりやすくなると思います。
 
-わざわざ`T extends T`としなくてもUnion Distribution自体は`Bar<T>`の内部で発生する可能性がありますが、それが意図するものかどうかはわかりません。以下の例では`LooseRepeat<T>`内で`T`がそのままの形で2回使われたためにUnion Distributionによって全ての組み合わせを網羅してしまっています。`T extends T`で先にUnion Distributionを起こせば`` `${T}${T}` ``の部分には分配された後の型が入って意図したものになります。
+わざわざ`T extends T`としなくてもUnion Distribution自体は`Bar<T>`の内部で発生する可能性がありますが、それが意図するものかどうかはわかりません。
+以下の例では`LooseRepeat<T>`内で`T`がそのままの形で2回使われたために、Union Distributionによって全ての組み合わせを網羅してしまっています。
+`T extends T`で先にUnion Distributionを起こせば`` `${T}${T}` ``の部分には分配された後の型が入って意図したものになります。
 ```typescript
 // 与えられた文字列を2度繰り返す
 type LooseRepeat<T extends string> = `${T}${T}`;
@@ -332,7 +348,9 @@ type LooseResult = LooseRepeat<"foo" | "bar">;
 type StrictResult = StrictRepeat<"foo" | "bar">;
 ```
 
-## 再帰呼び出し回数制限にかかりにくくする
+## その他
+
+### 再帰呼び出し回数制限にかかりにくくする
 Conditional Typesで再帰呼び出しを行う際、その型単独で書くと末尾再帰の最適化によって再帰呼び出しの回数制限`"Type instantiation is excessively deep and possibly infinite."`にかかりにくくなります。
 
 具体的には以下の通りです。
@@ -358,7 +376,7 @@ type X1 = Foo1<"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ">;
 type X2 = Foo2<"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ">;
 ```
 
-## Conditional Typesで意図しない分岐をしてしまうのを対策する
+### Conditional Typesで意図しない分岐をしてしまうのを対策する
 もちろん場合によりけりですが、間違ってなさそうなのに正解できない場合はConditional Typesに`never`型が紛れ込んでいるケースが多々あります。
 
 Conditional Typesには`T extends U ? X : Y`の`T`が`never`型のとき`X`でも`Y`でもなく`never`型が返るという仕様があります。  
@@ -382,6 +400,5 @@ type Y = Baz<never, number>;
 ```
 
 // 引数をまとめて受ける
-// 引数をタプルで受ける(value: [...T])
 // Utility types
 // - 英大文字、英小文字の検出
