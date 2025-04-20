@@ -364,6 +364,39 @@ type LooseResult = LooseRepeat<"foo" | "bar">;
 type StrictResult = StrictRepeat<"foo" | "bar">;
 ```
 
+## 関数型関連
+
+### 関数オーバーロードを表現する
+突然ですが、ここで問題です。
+
+関数`f`は1個の`number`型あるいは`string`型の引数`x`を取り、`x`が`number`型なら`number`型を、`string`型なら`string`型を返します。この関数`f`を表す型`F`を書いてください。
+
+「なるほど、`(x: number) => number` **または** `(x: string) => string` だから……」と思って以下のようにすると引数で型エラーが発生します。身に覚えのない`never`に襲われていますし、よく見ると返り値の型も変です。
+```typescript
+type F = ((x: number) => number) | ((x: string) => string);
+declare const f: F;
+// Error: Argument of type '3' is not assignable to parameter of type 'never'.
+// const x: number | string
+const x = f(42);
+// Error: Argument of type 'bar' is not assignable to parameter of type 'never'.
+// const x: number | string
+const y = f("bar");
+```
+
+状況を整理しましょう。変数`f`には「`number`型の引数を1つ取って`number`型を返す関数」あるいは「`string`型の引数を1つ取って`string`型を返す関数」のいずれかが入ると解釈できます。よって`f`を呼び出す際はこれらのどちらであっても問題ないような引数、すなわち`number | string`ではなく`number & string`を渡す必要があります。当然`number & string == never`なので、身に覚えのない`never`はここから生じていたんですね……
+
+よって正しくはむしろ逆で、`(x: number) => number`と`(x: string) => string`の共通部分を受け入れる型になります。[^overroad]
+```typescript
+type F = ((x: number) => number) & ((x: string) => string);
+declare const f: F;
+// const x: number
+const x = f(42);
+// const x: string
+const y = f("bar");
+```
+
+[^overroad]: 関数の引数には反変性があることを知っていれば抵抗なく受け入れられると思います。
+
 ## その他
 
 ### 再帰呼び出し回数制限にかかりにくくする
