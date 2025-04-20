@@ -122,7 +122,7 @@ type Foo<T, A = Initial> = T extends [infer F, ...infer R]
     ? Foo<R, Bar<A, F>>
     : A;
 ```
-型引数に途中経過`A`を持たせることで`Array.prototype.reduce`のような操作ができます。`Bar<A, F>`の部分がコールバック関数に相当します。
+型引数に途中経過`A`を持たせることで`Array.prototype.reduce`のような操作ができます。`Bar<A, F>`の部分がコールバック関数に相当します。`Initial`には適当な初期値を入れておきます。
 
 ### タプルの各要素で条件を満たすものの個数を調べる（C++のstd::countやstd::count_if相当）
 数値を直接カウントアップする術はないので、タプルの長さを用います。
@@ -227,6 +227,22 @@ type Waldo = Parse<"NaN">;    // type Waldo = never
 ただし、数値リテラル型に変換する場合は「10進表記」かつ「浮動小数点表記ではない」かつ「余分なゼロが存在しない」ような文字列を与える必要があります。  
 上記を満たさないものの数値として解釈可能な文字列が与えられた場合は単に`number`型が返ります。
 
+### 英大文字、英小文字を検出する
+Utility typesの`Uppercase<S>`は`S`に含まれる英小文字を大文字に、`Lowercase<S>`は`S`に含まれる英大文字を小文字に変換しますが、対象となる文字以外は素通しするためこれで判別が可能です。
+```typescript
+type ContainsAlphabet<S extends string> = S extends Uppercase<S>
+    ? S extends Lowercase<S>
+        ? false
+        : true
+    : true;
+
+type Foo = ContainsAlphabet<"A">;     // type Foo = true
+type Bar = ContainsAlphabet<"a">;     // type Bar = true
+type Baz = ContainsAlphabet<"_foo">;  // type Baz = true
+type Qux = ContainsAlphabet<"123">;   // type Qux = false
+type Quux = ContainsAlphabet<"">;     // type Quux = false
+```
+英大文字は`Lowercase<S>`で必ず変換され、英小文字は`Uppercase<S>`で必ず変換されるため、双方に通して変換されないのは英文字以外と判別できます。
 
 ## オブジェクト関連
 
@@ -398,7 +414,3 @@ type Baz<T, U> = [T] extends [U] ? 1 : 0;
 // type Y = 1
 type Y = Baz<never, number>;
 ```
-
-// 引数をまとめて受ける
-// Utility types
-// - 英大文字、英小文字の検出
