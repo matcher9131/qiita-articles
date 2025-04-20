@@ -4,7 +4,7 @@ TypeScriptの複雑な型システムをどれほど理解しているのかの�
 
 [PartialByKeys](https://github.com/type-challenges/type-challenges/blob/main/questions/02757-medium-partialbykeys/README.md)のような割と実用的なものから、
 [Valid Sudoku](https://github.com/type-challenges/type-challenges/blob/main/questions/35314-hard-valid-sudoku/README.md)のようにこんなのいつ使うんだよ……となるものまで
-様々な問題が収録されているType Challengesですが、これらを解く際に使えるテクニックや考え方をご紹介します。
+様々な問題が収録されているType Challengesですが、これらを解く際によく使うテクニックや考え方をご紹介します。
 
 Type Challengesだけではなく、これってどう書けばよかったっけ…？となった際に辞書的に使えるものになっていますので、ぜひご覧ください。
 
